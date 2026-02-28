@@ -1,27 +1,64 @@
 import React from 'react';
+import * as RadixTheme from '@radix-ui/themes';
+import { Theme, Box, Flex, Heading } from '@radix-ui/themes';
+import '@radix-ui/themes/styles.css';
+import { ThemeProvider, useTheme } from './contexts/ThemeContext';
+import { ThemeToggle } from './components/ThemeToggle';
 import { RouteMap } from './components/RouteMap';
 import { LeftPanel } from './components/LeftPanel';
-import { POIFilterButtons } from './components/POIFilterButtons';
-import './App.css';
+
+function AppContent() {
+  return (
+    <Box style={{ minHeight: '100vh' }} className="overflow-hidden">
+      {/* Header */}
+      <Box 
+        p="4" 
+        style={{ 
+          borderBottom: 'none',
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 50,
+          backgroundColor: 'rgba(255, 255, 255, 0)',
+          backdropFilter: 'blur(0px)',
+        }}
+      >
+        <Flex justify="between" align="center">
+          <Heading size="5" weight="bold">
+            🚴 Cycling Route Planner
+          </Heading>
+          <ThemeToggle />
+        </Flex>
+      </Box>
+
+      {/* Main Content */}
+      <Box className="w-screen h-screen overflow-hidden" style={{ paddingTop: '70px' }}>
+        {/* Fullscreen Map */}
+        <RouteMap />
+
+        {/* Left Panel - Route Planning */}
+        <LeftPanel />
+      </Box>
+    </Box>
+  );
+}
+
+function AppWithTheme() {
+  const { theme } = useTheme();
+
+  return (
+    <Theme appearance={theme} accentColor="blue" grayColor="slate" radius="medium">
+      <AppContent />
+    </Theme>
+  );
+}
 
 function App() {
   return (
-    <div className="w-screen h-screen bg-gray-50 overflow-hidden">
-      {/* Fullscreen Map */}
-      <RouteMap />
-
-      {/* Left Panel - Route Planning */}
-      <LeftPanel />
-
-      {/* Bottom Panel - POI Filters */}
-      <POIFilterButtons />
-
-      {/* Header */}
-      <header className="absolute top-0 left-0 right-0 bg-gradient-to-r from-blue-600 to-blue-800 text-white py-3 px-4 z-50 shadow-lg">
-        <h1 className="text-2xl font-bold">🚴 Cycling Route Planner</h1>
-        <p className="text-blue-100 text-sm">Entdecke Routen und finde Orte zum Essen</p>
-      </header>
-    </div>
+    <ThemeProvider>
+      <AppWithTheme />
+    </ThemeProvider>
   );
 }
 
