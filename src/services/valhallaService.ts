@@ -16,6 +16,7 @@ import {
 } from '../types/valhalla';
 
 const VALHALLA_API_URL = import.meta.env.VITE_VALHALLA_API_URL || 'https://valhalla1.openstreetmap.de';
+const BACKEND_API_URL = import.meta.env.VITE_BACKEND_API_URL || 'http://localhost:3001/api';
 const DEBUG = (import.meta.env.VITE_DEBUG_LOGGING as string | undefined) === 'true';
 
 /**
@@ -199,7 +200,7 @@ class ValhallaService {
   async getElevationProfile(geometry: [number, number][]): Promise<ElevationPoint[]> {
     if (geometry.length === 0) return [];
 
-    // Build elevation request - using the route shape
+    // Build elevation request - use backend proxy to bypass CORS
     try {
       console.log('[Valhalla] Elevation request - sending coords sample:', 
         geometry.slice(0, 2).map(c => `[lat:${c[0]?.toFixed(4)}, lon:${c[1]?.toFixed(4)}]`));
@@ -208,7 +209,8 @@ class ValhallaService {
         shape: geometry.map((coord) => ({ lat: coord[0], lon: coord[1] })),
       };
       
-      const response = await this.fetchWithRetry(`${this.baseUrl}/elevation`, {
+      // Use backend proxy endpoint instead of direct Valhalla call
+      const response = await this.fetchWithRetry(`${BACKEND_API_URL}/elevation`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(elevationPayload),

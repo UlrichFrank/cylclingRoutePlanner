@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+server/node_modules/
+/.pnp
+.pnp.js
+
+# Testing
+/coverage
+
+# Production
+/dist
+/build
+
+# Misc
+.DS_Store
+.env.local
+.env.*.local
+*.log
+*.pem
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Backup
+*.bak
+.backup/
+
+# Server
+server/routes.json
+server/travelagent.db
