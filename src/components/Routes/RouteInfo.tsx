@@ -35,42 +35,6 @@ export const RouteInfo: React.FC = () => {
         <div className="space-y-4">
           <p className="text-gray-700 text-sm dark:text-gray-300">{currentRoute.description || 'No description'}</p>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-blue-50 p-3 rounded-md dark:bg-blue-900/20">
-              <p className="text-xs text-gray-600 dark:text-gray-400">Entfernung</p>
-              <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
-                {currentRoute.geometry?.distance.toFixed(1) || stats.distance} km
-              </p>
-            </div>
-
-            <div className="bg-purple-50 p-3 rounded-md dark:bg-purple-900/20">
-              <p className="text-xs text-gray-600 dark:text-gray-400">Höhenmeter</p>
-              <p className="text-lg font-bold text-purple-600 dark:text-purple-400">
-                +{currentRoute.geometry?.elevationGain || 0} m
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="text-2xl">
-              {currentRoute.difficultyLevel === 'easy'
-                ? '🟢'
-                : currentRoute.difficultyLevel === 'medium'
-                  ? '🟡'
-                  : '🔴'}
-            </span>
-            <div>
-              <p className="text-xs text-gray-600 dark:text-gray-400">Schwierigkeit</p>
-              <span className="inline-block px-3 py-1 rounded-full text-sm font-semibold capitalize bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
-                {currentRoute.difficultyLevel === 'easy'
-                  ? 'Leicht'
-                  : currentRoute.difficultyLevel === 'medium'
-                    ? 'Mittel'
-                    : 'Schwer'}
-              </span>
-            </div>
-          </div>
-
           <div className="border-t pt-3 dark:border-gray-700">
             <p className="text-xs font-bold text-gray-700 dark:text-gray-300 mb-2">Wegpunkte</p>
             <div className="space-y-1 max-h-48 overflow-y-auto">

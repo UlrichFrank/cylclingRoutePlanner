@@ -28,7 +28,7 @@ function AppContent() {
       </Box>
 
       {/* Main Content */}
-      <Box className="w-screen h-screen overflow-hidden" style={{ paddingTop: '180px' }}>
+      <Box className="w-screen h-screen overflow-hidden" style={{ paddingTop: '100px' }}>
         {/* Fullscreen Map */}
         <RouteMap />
 

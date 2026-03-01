@@ -40,7 +40,6 @@ export function RouteHeader() {
 
   return (
     <Box 
-      p="4" 
       style={{ 
         borderBottom: '1px solid var(--gray-6)',
         position: 'absolute',
@@ -50,74 +49,52 @@ export function RouteHeader() {
         zIndex: 50,
         backgroundColor: 'var(--color-background)',
         backdropFilter: 'blur(8px)',
+        padding: '8px 16px',
       }}
     >
       <Flex justify="between" align="center" gap="4">
-        {/* Title and Stats */}
-        <Flex direction="column" gap="2" style={{ flex: 1 }}>
-          <Heading size="5" weight="bold">
+        {/* Title and Stats on Left */}
+        <Flex direction="column" gap="1" style={{ flex: 1 }}>
+          <Heading size="4" weight="bold" style={{ margin: 0 }}>
             🚴 Cycling Route Planner
           </Heading>
           
-          {/* Stats Row */}
+          {/* Stats Row - Compact */}
           {geometry && (
-            <Flex gap="6" align="center" wrap="wrap">
+            <Flex gap="4" align="center" wrap="wrap" style={{ fontSize: '12px' }}>
               {/* Distance */}
-              <Flex direction="column" gap="1">
-                <Text size="1" color="gray">
-                  Entfernung
-                </Text>
-                <Text size="3" weight="bold">
-                  {geometry.distance.toFixed(1)} km
-                </Text>
-              </Flex>
+              <Text size="2">
+                <strong>{geometry.distance.toFixed(1)} km</strong>
+              </Text>
 
               {/* Elevation Gain */}
-              <Flex direction="column" gap="1">
-                <Text size="1" color="gray">
-                  ⬆️ Aufstieg
-                </Text>
-                <Text size="3" weight="bold">
-                  {geometry.elevationGain} m
-                </Text>
-              </Flex>
+              <Text size="2">
+                ⬆️ <strong>{geometry.elevationGain} m</strong>
+              </Text>
 
               {/* Elevation Loss */}
-              <Flex direction="column" gap="1">
-                <Text size="1" color="gray">
-                  ⬇️ Abstieg
-                </Text>
-                <Text size="3" weight="bold">
-                  {geometry.elevationLoss} m
-                </Text>
-              </Flex>
+              <Text size="2">
+                ⬇️ <strong>{geometry.elevationLoss} m</strong>
+              </Text>
 
               {/* Max Elevation */}
-              <Flex direction="column" gap="1">
-                <Text size="1" color="gray">
-                  Max Höhe
-                </Text>
-                <Text size="3" weight="bold">
-                  {geometry.maxElevation} m
-                </Text>
-              </Flex>
+              <Text size="2">
+                🏔️ <strong>{geometry.maxElevation} m</strong>
+              </Text>
 
               {/* Difficulty */}
-              <Flex direction="column" gap="1">
-                <Text size="1" color="gray">
-                  Schwierigkeit
-                </Text>
-                <Text size="3" weight="bold" color={getDifficultyColor(currentRoute.difficultyLevel)}>
+              <Text size="2">
+                Schwierigkeit: <strong color={getDifficultyColor(currentRoute.difficultyLevel)}>
                   {getDifficultyLabel(currentRoute.difficultyLevel)}
-                </Text>
-              </Flex>
+                </strong>
+              </Text>
             </Flex>
           )}
         </Flex>
 
-        {/* Mini Elevation Chart - only show if route has geometry */}
+        {/* Mini Elevation Chart on Right - Narrower */}
         {geometry && (
-          <Box style={{ width: '300px', height: '60px', flexShrink: 0 }}>
+          <Box style={{ width: '180px', height: '50px', flexShrink: 0 }}>
             <ElevationProfile 
               compact={true}
             />

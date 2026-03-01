@@ -76,88 +76,96 @@ export const RouteMap: React.FC = () => {
     // Initialize map only once
     if (!mapInstance.current) {
       console.log('[Map Init] Creating map instance');
-      try {
-        // Try to get user's location, fallback to Berlin
-        const initializeMap = (lat: number, lng: number) => {
-          if (!mapContainer.current) return;
-          
-          mapInstance.current = L.map(mapContainer.current, {
-            center: [lat, lng],
-            zoom: 13,
-            zoomControl: false,
-          });
-          console.log('[Map Init] Map instance created at:', [lat, lng]);
-
-          // Add zoom control to bottom right
-          L.control.zoom({ position: 'bottomright' }).addTo(mapInstance.current);
-
-          // Add tile layer
-          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-            maxZoom: 19,
-            minZoom: 2,
-          }).addTo(mapInstance.current);
-
-          // Add scale control (bottom right)
-          L.control.scale({ position: 'bottomright' }).addTo(mapInstance.current);
-
-          // Create layer groups
-          routeLayerGroup.current = L.layerGroup().addTo(mapInstance.current);
-          poiLayerGroup.current = L.layerGroup().addTo(mapInstance.current);
-
-          // Track drag state properly
-          mapInstance.current.on('dragstart', () => {
-            console.log('[Map] dragstart');
-            isDraggingRef.current = true;
-          });
-
-          mapInstance.current.on('dragend', () => {
-            console.log('[Map] dragend');
-            isDraggingRef.current = false;
-          });
-
-          mapInstance.current.on('click', (e: L.LeafletMouseEvent) => {
-            console.log('[Map] click event fired!', {
-              isDragging: isDraggingRef.current,
-              button: e.originalEvent.button,
-              latlng: e.latlng,
+      
+      // Check if map was already created in this container
+      const existingMap = (mapContainer.current as any)._leaflet_map;
+      if (existingMap) {
+        console.log('[Map Init] Map already exists, using existing instance');
+        mapInstance.current = existingMap;
+      } else {
+        try {
+          // Try to get user's location, fallback to Berlin
+          const initializeMap = (lat: number, lng: number) => {
+            if (!mapContainer.current || mapInstance.current) return;
+            
+            mapInstance.current = L.map(mapContainer.current, {
+              center: [lat, lng],
+              zoom: 13,
+              zoomControl: false,
             });
-            // Show context menu on left-click if not dragging
-            if (!isDraggingRef.current && e.originalEvent.button === 0) {
-              console.log('[Map] Setting context menu');
-              setContextMenu({
-                lat: e.latlng.lat,
-                lng: e.latlng.lng,
-                x: e.originalEvent.clientX,
-                y: e.originalEvent.clientY,
-              });
-            }
-          });
-          
-          console.log('[Map] Click event listener registered on map instance');
-        };
+            console.log('[Map Init] Map instance created at:', [lat, lng]);
 
-        // Request user's location with timeout
-        if ('geolocation' in navigator) {
-          console.log('[Map Init] Requesting user geolocation...');
-          navigator.geolocation.getCurrentPosition(
-            (position) => {
-              console.log('[Map Init] Got user location:', position.coords.latitude, position.coords.longitude);
-              initializeMap(position.coords.latitude, position.coords.longitude);
-            },
-            (error) => {
-              console.log('[Map Init] Geolocation error:', error.message, 'Using fallback');
-              // Fallback to Berlin
-              initializeMap(52.52, 13.4);
-            },
-            { timeout: 5000 } // 5 second timeout
-          );
-        } else {
-          // Fallback if geolocation not available
-          initializeMap(52.52, 13.4);
+            // Add zoom control to bottom right
+            L.control.zoom({ position: 'bottomright' }).addTo(mapInstance.current);
+
+            // Add tile layer
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+              attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+              maxZoom: 19,
+              minZoom: 2,
+            }).addTo(mapInstance.current);
+
+            // Add scale control (bottom right)
+            L.control.scale({ position: 'bottomright' }).addTo(mapInstance.current);
+
+            // Create layer groups
+            routeLayerGroup.current = L.layerGroup().addTo(mapInstance.current);
+            poiLayerGroup.current = L.layerGroup().addTo(mapInstance.current);
+
+            // Track drag state properly
+            mapInstance.current.on('dragstart', () => {
+              console.log('[Map] dragstart');
+              isDraggingRef.current = true;
+            });
+
+            mapInstance.current.on('dragend', () => {
+              console.log('[Map] dragend');
+              isDraggingRef.current = false;
+            });
+
+            mapInstance.current.on('click', (e: L.LeafletMouseEvent) => {
+              console.log('[Map] click event fired!', {
+                isDragging: isDraggingRef.current,
+                button: e.originalEvent.button,
+                latlng: e.latlng,
+              });
+              // Show context menu on left-click if not dragging
+              if (!isDraggingRef.current && e.originalEvent.button === 0) {
+                console.log('[Map] Setting context menu');
+                setContextMenu({
+                  lat: e.latlng.lat,
+                  lng: e.latlng.lng,
+                  x: e.originalEvent.clientX,
+                  y: e.originalEvent.clientY,
+                });
+              }
+            });
+            
+            console.log('[Map] Click event listener registered on map instance');
+          };
+
+          // Request user's location with timeout
+          if ('geolocation' in navigator) {
+            console.log('[Map Init] Requesting user geolocation...');
+            navigator.geolocation.getCurrentPosition(
+              (position) => {
+                console.log('[Map Init] Got user location:', position.coords.latitude, position.coords.longitude);
+                initializeMap(position.coords.latitude, position.coords.longitude);
+              },
+              (error) => {
+                console.log('[Map Init] Geolocation error:', error.message, 'Using fallback');
+                // Fallback to Berlin
+                initializeMap(52.52, 13.4);
+              },
+              { timeout: 5000 } // 5 second timeout
+            );
+          } else {
+            // Fallback if geolocation not available
+            initializeMap(52.52, 13.4);
+          }
+        } catch (error) {
+          console.error('Error initializing map:', error);
         }
-      } catch (error) {
-        console.error('Error initializing map:', error);
       }
     }
 
