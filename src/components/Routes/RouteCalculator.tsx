@@ -83,9 +83,10 @@ export const RouteCalculator: React.FC<RouteCalculatorProps> = ({ onRouteCalcula
       const stats = await valhallaService.getRouteStats(locations, profile);
 
       // Convert geometry back to our RouteCoordinate format
+      // Valhalla polyline decoder now returns [lat, lng] format
       const geometry = routeResult.geometry.map((coord) => ({
-        lat: coord[1],
-        lng: coord[0],
+        lat: coord[0],  // First element is now lat
+        lng: coord[1],  // Second element is now lng
       }));
       
       console.log('[RouteCalculator] Converted geometry sample:', geometry.slice(0, 3));

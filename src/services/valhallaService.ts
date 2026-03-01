@@ -19,8 +19,9 @@ const VALHALLA_API_URL = import.meta.env.VITE_VALHALLA_API_URL || 'https://valha
 const DEBUG = (import.meta.env.VITE_DEBUG_LOGGING as string | undefined) === 'true';
 
 /**
- * Encode polyline to string (inverse of Google's polyline decoder)
- * Used for visualization on map
+ * Decode Google Polyline Format (used by Valhalla)
+ * Input: encoded polyline string
+ * Output: array of [lat, lng] coordinates
  */
 function decodePolyline(encoded: string): [number, number][] {
   const poly: [number, number][] = [];
@@ -29,6 +30,7 @@ function decodePolyline(encoded: string): [number, number][] {
   let lng = 0;
 
   while (index < encoded.length) {
+    // Decode latitude
     let result = 0;
     let shift = 0;
     let b: number;
@@ -42,6 +44,7 @@ function decodePolyline(encoded: string): [number, number][] {
     const dlat = result & 1 ? ~(result >> 1) : result >> 1;
     lat += dlat;
 
+    // Decode longitude
     result = 0;
     shift = 0;
 
@@ -54,7 +57,8 @@ function decodePolyline(encoded: string): [number, number][] {
     const dlng = result & 1 ? ~(result >> 1) : result >> 1;
     lng += dlng;
 
-    poly.push([lng / 1e5, lat / 1e5]);
+    // Push as [lat, lng] (Leaflet format) after scaling
+    poly.push([lat / 1e5, lng / 1e5]);
   }
 
   return poly;
@@ -198,10 +202,10 @@ class ValhallaService {
     // Build elevation request - using the route shape
     try {
       console.log('[Valhalla] Elevation request - sending coords sample:', 
-        geometry.slice(0, 2).map(c => `[lat:${c[1]?.toFixed(4)}, lon:${c[0]?.toFixed(4)}]`));
+        geometry.slice(0, 2).map(c => `[lat:${c[0]?.toFixed(4)}, lon:${c[1]?.toFixed(4)}]`));
       
       const elevationPayload = {
-        shape: geometry.map((coord) => ({ lat: coord[1], lon: coord[0] })),
+        shape: geometry.map((coord) => ({ lat: coord[0], lon: coord[1] })),
       };
       
       const response = await this.fetchWithRetry(`${this.baseUrl}/elevation`, {
@@ -228,8 +232,8 @@ class ValhallaService {
       return geometry.map((coord, idx) => ({
         distance: this.calculateDistanceAlongRoute(geometry, idx),
         elevation: elevations[idx] || 0,
-        lat: coord[1],
-        lon: coord[0],
+        lat: coord[0],
+        lon: coord[1],
       }));
     } catch (error) {
       if (DEBUG) console.error('[Valhalla] Elevation fetch failed:', error);
@@ -237,8 +241,8 @@ class ValhallaService {
       return geometry.map((coord, idx) => ({
         distance: this.calculateDistanceAlongRoute(geometry, idx),
         elevation: 0,
-        lat: coord[1],
-        lon: coord[0],
+        lat: coord[0],
+        lon: coord[1],
       }));
     }
   }
