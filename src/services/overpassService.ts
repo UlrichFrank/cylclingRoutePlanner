@@ -4,6 +4,49 @@ import { RouteCoordinate } from '../store/routeStore';
 
 const OVERPASS_API = 'https://overpass-api.de/api/interpreter';
 
+// Rate limiting: max 1 request per second, with exponential backoff on 429
+const REQUEST_DELAY_MS = 1500; // 1.5 seconds between requests
+let lastRequestTime = 0;
+let retryCount = 0;
+const MAX_RETRIES = 2;
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+const rateLimitedRequest = async (query: string, attempt = 0): Promise<any> => {
+  // Calculate delay since last request
+  const timeSinceLastRequest = Date.now() - lastRequestTime;
+  const requiredDelay = REQUEST_DELAY_MS;
+
+  if (timeSinceLastRequest < requiredDelay) {
+    const delayNeeded = requiredDelay - timeSinceLastRequest;
+    await sleep(delayNeeded);
+  }
+
+  lastRequestTime = Date.now();
+
+  try {
+    const response = await axios.post(OVERPASS_API, query, {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      timeout: 8000,
+    });
+    retryCount = 0; // Reset on success
+    return response;
+  } catch (error: any) {
+    // Handle 429 Too Many Requests
+    if (error.response?.status === 429) {
+      if (attempt < MAX_RETRIES) {
+        const backoffDelay = Math.pow(2, attempt) * 2000; // 2s, 4s, 8s
+        console.warn(`[Overpass] 429 Too Many Requests. Retrying in ${backoffDelay}ms...`);
+        await sleep(backoffDelay);
+        return rateLimitedRequest(query, attempt + 1);
+      } else {
+        throw new Error('Overpass API rate limited. Using mock data instead.');
+      }
+    }
+    throw error;
+  }
+};
+
 export interface BoundingBox {
   south: number;
   west: number;

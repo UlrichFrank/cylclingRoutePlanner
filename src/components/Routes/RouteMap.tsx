@@ -279,15 +279,17 @@ export const RouteMap: React.FC = () => {
           ref={contextMenuRef}
           style={{
             position: 'fixed',
-            top: `${contextMenu.y}px`,
-            left: `${contextMenu.x}px`,
+            top: `${Math.max(50, contextMenu.y)}px`,
+            left: `${Math.max(10, Math.min(contextMenu.x, window.innerWidth - 200))}px`,
             backgroundColor: 'white',
-            border: '1px solid #ccc',
-            borderRadius: '4px',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-            zIndex: 1000,
+            border: '2px solid #0ea5e9',
+            borderRadius: '6px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+            zIndex: 10000, // Very high z-index to ensure visibility
             minWidth: '180px',
+            padding: '4px',
           }}
+          onClick={(e) => e.stopPropagation()}
         >
           <button
             onClick={() => {
@@ -308,15 +310,16 @@ export const RouteMap: React.FC = () => {
               textAlign: 'left',
               cursor: 'pointer',
               fontSize: '14px',
+              color: '#0f172a',
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#f0f0f0';
+              e.currentTarget.style.backgroundColor = '#e0f2fe';
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.backgroundColor = 'transparent';
             }}
           >
-            Wegepunkt setzen
+            📍 Wegepunkt setzen
           </button>
         </div>
       )}
