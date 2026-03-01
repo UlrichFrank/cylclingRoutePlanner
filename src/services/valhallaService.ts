@@ -20,15 +20,17 @@ const BACKEND_API_URL = import.meta.env.VITE_BACKEND_API_URL || 'http://localhos
 const DEBUG = (import.meta.env.VITE_DEBUG_LOGGING as string | undefined) === 'true';
 
 /**
- * Decode Google Polyline Format (used by Valhalla)
+ * Decode Google Polyline Format (used by Valhalla with 1e6 precision)
  * Input: encoded polyline string
  * Output: array of [lat, lng] coordinates
+ * NOTE: Valhalla uses 1e6 precision, not standard Google Maps 1e5
  */
 function decodePolyline(encoded: string): [number, number][] {
   const poly: [number, number][] = [];
   let index = 0;
   let lat = 0;
   let lng = 0;
+  const PRECISION_FACTOR = 1e6; // Valhalla uses 1e6, not 1e5
 
   while (index < encoded.length) {
     // Decode latitude
@@ -58,8 +60,8 @@ function decodePolyline(encoded: string): [number, number][] {
     const dlng = result & 1 ? ~(result >> 1) : result >> 1;
     lng += dlng;
 
-    // Push as [lat, lng] (Leaflet format) after scaling
-    poly.push([lat / 1e5, lng / 1e5]);
+    // Push as [lat, lng] (Leaflet format) with correct Valhalla precision
+    poly.push([lat / PRECISION_FACTOR, lng / PRECISION_FACTOR]);
   }
 
   return poly;
