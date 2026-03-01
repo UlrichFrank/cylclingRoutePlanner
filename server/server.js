@@ -45,6 +45,11 @@ app.post('/api/elevation', async (req, res) => {
 
     console.log('[Elevation] Request for', shape.length, 'points');
 
+    // Validate shape format
+    if (shape.some((point) => typeof point.lat !== 'number' || typeof point.lon !== 'number')) {
+      return res.status(400).json({ error: 'Invalid shape format: each point must have lat and lon' });
+    }
+
     const response = await fetch('https://valhalla1.openstreetmap.de/elevation', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -52,12 +57,19 @@ app.post('/api/elevation', async (req, res) => {
     });
 
     if (!response.ok) {
-      const errorData = await response.text().catch(() => response.statusText);
-      console.error('[Elevation] Error from Valhalla:', response.status, errorData);
-      return res.status(response.status).json({ error: errorData });
+      const errorText = await response.text().catch(() => response.statusText);
+      console.error('[Elevation] Error from Valhalla:', response.status, errorText);
+      return res.status(response.status).json({ 
+        error: `Valhalla API error: ${response.status}`,
+        details: errorText 
+      });
     }
 
-    const data = await response.json();
+    const data = await response.json().catch((parseErr) => {
+      console.error('[Elevation] Failed to parse JSON:', parseErr.message);
+      throw new Error(`Failed to parse Valhalla response: ${parseErr.message}`);
+    });
+
     console.log('[Elevation] Got', data.elevation?.length, 'elevation points');
     
     res.json(data);

@@ -204,11 +204,19 @@ class ValhallaService {
 
     // Build elevation request - use backend proxy to bypass CORS
     try {
-      console.log('[Valhalla] Elevation request - sending coords sample:', 
-        geometry.slice(0, 2).map(c => `[lat:${c[0]?.toFixed(4)}, lon:${c[1]?.toFixed(4)}]`));
+      // Sampling: reduce number of points to stay within API limits
+      // Send only every Nth point where N depends on geometry size
+      const SAMPLE_SIZE = 500; // Max points to send
+      const sampleStep = Math.max(1, Math.floor(geometry.length / SAMPLE_SIZE));
+      const sampledGeometry = geometry.filter((_, idx) => idx % sampleStep === 0 || idx === geometry.length - 1);
+
+      console.log('[Valhalla] Elevation request - geometry:', geometry.length, 'points, sampled to:', 
+        sampledGeometry.length, '(step:', sampleStep, ')');
+      console.log('[Valhalla] Elevation request - sample coords:', 
+        sampledGeometry.slice(0, 2).map(c => `[lat:${c[0]?.toFixed(4)}, lon:${c[1]?.toFixed(4)}]`));
       
       const elevationPayload = {
-        shape: geometry.map((coord) => ({ lat: coord[0], lon: coord[1] })),
+        shape: sampledGeometry.map((coord) => ({ lat: coord[0], lon: coord[1] })),
       };
       
       // Use backend proxy endpoint instead of direct Valhalla call
@@ -232,10 +240,13 @@ class ValhallaService {
       }
 
       // Convert response to ElevationPoint array
-      const elevations = (data.elevation as number[]) || [];
+      // Interpolate elevation for non-sampled points
+      const sampledElevations = (data.elevation as number[]) || [];
+      const fullElevations = this.interpolateElevations(geometry, sampledGeometry, sampledElevations);
+      
       return geometry.map((coord, idx) => ({
         distance: this.calculateDistanceAlongRoute(geometry, idx),
-        elevation: elevations[idx] || 0,
+        elevation: fullElevations[idx] || 0,
         lat: coord[0],
         lon: coord[1],
       }));
@@ -249,6 +260,65 @@ class ValhallaService {
         lon: coord[1],
       }));
     }
+  }
+
+  /**
+   * Interpolate elevation values for all points based on sampled elevations
+   * Uses linear interpolation between sampled points
+   */
+  private interpolateElevations(
+    fullGeometry: [number, number][],
+    sampledGeometry: [number, number][],
+    sampledElevations: number[]
+  ): number[] {
+    if (sampledElevations.length === 0) return Array(fullGeometry.length).fill(0);
+    if (sampledElevations.length === 1) return Array(fullGeometry.length).fill(sampledElevations[0]);
+
+    const result: number[] = Array(fullGeometry.length);
+
+    // Find indices of sampled points in full geometry
+    let sampledIdx = 0;
+    for (let i = 0; i < fullGeometry.length; i++) {
+      const fullCoord = fullGeometry[i];
+      
+      // Find which sampled point this corresponds to
+      if (sampledIdx < sampledGeometry.length && 
+          fullCoord[0] === sampledGeometry[sampledIdx][0] && 
+          fullCoord[1] === sampledGeometry[sampledIdx][1]) {
+        // This is a sampled point
+        result[i] = sampledElevations[sampledIdx];
+        sampledIdx++;
+      } else if (sampledIdx > 0 && sampledIdx < sampledGeometry.length) {
+        // Interpolate between previous and next sampled points
+        const prevElev = sampledElevations[sampledIdx - 1];
+        const nextElev = sampledElevations[sampledIdx];
+        
+        // Find how many points are between previous and next sampled
+        const prevIdx = fullGeometry.findIndex(
+          (c) => c[0] === sampledGeometry[sampledIdx - 1][0] && c[1] === sampledGeometry[sampledIdx - 1][1]
+        );
+        const nextIdx = fullGeometry.findIndex(
+          (c) => c[0] === sampledGeometry[sampledIdx][0] && c[1] === sampledGeometry[sampledIdx][1]
+        );
+        
+        if (prevIdx >= 0 && nextIdx >= 0) {
+          const distance = i - prevIdx;
+          const totalDistance = nextIdx - prevIdx;
+          const ratio = totalDistance > 0 ? distance / totalDistance : 0;
+          result[i] = prevElev + (nextElev - prevElev) * ratio;
+        } else {
+          result[i] = prevElev;
+        }
+      } else if (sampledIdx === 0) {
+        // Before first sampled point
+        result[i] = sampledElevations[0];
+      } else {
+        // After last sampled point
+        result[i] = sampledElevations[sampledElevations.length - 1];
+      }
+    }
+
+    return result;
   }
 
   /**
