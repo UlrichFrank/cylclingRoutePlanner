@@ -53,24 +53,24 @@ function startProcess(name, command, args, env) {
   console.log(`\n🚀 Starting ${name}...`);
   console.log(`   Command: ${command} ${args.join(' ')}`);
   
-  const process = spawn(command, args, {
+  const proc = spawn(command, args, {
     cwd: env.CWD,
-    env: { ...process.env, ...env },
+    env: { ...globalThis.process.env, ...env },
     stdio: 'inherit',
     shell: true,
   });
 
-  process.on('error', (err) => {
+  proc.on('error', (err) => {
     console.error(`❌ ${name} error:`, err.message);
   });
 
-  process.on('exit', (code) => {
+  proc.on('exit', (code) => {
     if (code !== 0) {
       console.error(`❌ ${name} exited with code ${code}`);
     }
   });
 
-  return process;
+  return proc;
 }
 
 /**
