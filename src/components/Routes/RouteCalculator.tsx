@@ -172,38 +172,32 @@ export const RouteCalculator: React.FC<RouteCalculatorProps> = ({ onRouteCalcula
         backgroundColor: colors.bg,
       }}
     >
-      {/* Profile Selector */}
+      {/* Profile Selector - Combobox */}
       <div style={{ marginBottom: '12px' }}>
         <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '8px', color: colors.text }}>
           Fahrradtyp
         </label>
-        <div
+        <select
+          value={profile}
+          onChange={(e) => setProfile(e.target.value as ValhallaProfile)}
           style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(2, 1fr)',
-            gap: '8px',
+            width: '100%',
+            padding: '8px 12px',
+            borderRadius: '6px',
+            border: `1px solid ${colors.border}`,
+            backgroundColor: colors.mutedBg,
+            color: colors.text,
+            fontSize: '14px',
+            fontWeight: '500',
+            cursor: 'pointer',
           }}
         >
           {Object.entries(profileLabels).map(([key, label]) => (
-            <button
-              key={key}
-              onClick={() => setProfile(key as ValhallaProfile)}
-              style={{
-                padding: '8px 12px',
-                borderRadius: '6px',
-                border: `2px solid ${profile === key ? colors.primary : colors.border}`,
-                backgroundColor: profile === key ? colors.primary + '20' : colors.mutedBg,
-                color: colors.text,
-                fontSize: '12px',
-                fontWeight: profile === key ? '600' : '400',
-                cursor: 'pointer',
-                transition: 'all 0.2s',
-              }}
-            >
+            <option key={key} value={key}>
               {label}
-            </button>
+            </option>
           ))}
-        </div>
+        </select>
       </div>
 
       {/* Calculate Button */}
