@@ -131,7 +131,7 @@ class ValhallaService {
    */
   async calculateRoute(
     waypoints: LatLng[],
-    profile: ValhallaProfile = 'bicycle'
+    profile: ValhallaProfile = 'road'
   ): Promise<ValhallaRouteResult> {
     if (waypoints.length < 2) {
       throw new Error('At least 2 waypoints are required');
@@ -139,7 +139,7 @@ class ValhallaService {
 
     const request: ValhallRouteRequest = {
       locations: waypoints,
-      costing: profile,
+      costing: this.getValhallaCostingType(profile),
       costing_options: this.getCoastingOptions(profile),
       units: 'kilometers',
     };
@@ -248,7 +248,7 @@ class ValhallaService {
    */
   async getRouteStats(
     waypoints: LatLng[],
-    profile: ValhallaProfile = 'bicycle'
+    profile: ValhallaProfile = 'road'
   ): Promise<RouteStats> {
     const routeResult = await this.calculateRoute(waypoints, profile);
     const elevationProfile = await this.getElevationProfile(routeResult.geometry);
@@ -291,38 +291,40 @@ class ValhallaService {
     return stats;
   }
 
-  /**
-   * Get coasting options based on profile
-   */
   private getCoastingOptions(profile: ValhallaProfile) {
     switch (profile) {
-      case 'bicycle':
+      case 'mountain':
         return {
           bicycle: {
-            use_roads: 0.5,
+            use_roads: 0.3,  // Prefer trails
+            avoid_bad_surfaces: false,  // OK with rough terrain
+          },
+        };
+      case 'road':
+        return {
+          bicycle: {
+            use_roads: 0.95,  // Prefer paved roads
             avoid_bad_surfaces: true,
           },
         };
-      case 'ebike':
-        return {
-          ebike: {
-            use_roads: 0.6,
-            avoid_bad_surfaces: true,
-          },
-        };
-      case 'pedestrian':
-        return {};
-      case 'bikeshare':
+      case 'gravel':
         return {
           bicycle: {
-            use_roads: 0.8,
+            use_roads: 0.6,  // Mix of roads and gravel paths
+            avoid_bad_surfaces: false,  // OK with some rough terrain
           },
         };
-      case 'scooter':
-        return {};
       default:
         return {};
     }
+  }
+
+  /**
+   * Map user profile to Valhalla costing type
+   */
+  private getValhallaCostingType(profile: ValhallaProfile): 'bicycle' | 'car' | 'pedestrian' {
+    // All bicycle types use 'bicycle' as Valhalla costing
+    return 'bicycle';
   }
 
   /**

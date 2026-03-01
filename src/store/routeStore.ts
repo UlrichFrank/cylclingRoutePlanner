@@ -22,7 +22,7 @@ export interface Route {
   description?: string;
   waypoints: RouteCoordinate[]; // User-selected points (start, mid, end)
   geometry?: RouteGeometry; // Calculated route from Valhalla
-  profile: 'bicycle' | 'ebike' | 'pedestrian' | 'bikeshare' | 'scooter';
+  profile: 'mountain' | 'road' | 'gravel';
   difficultyLevel: 'easy' | 'medium' | 'hard';
   createdAt: number;
   updatedAt: number;
@@ -45,7 +45,7 @@ const EMPTY_ROUTE: Route = {
   description: '',
   waypoints: [],
   geometry: undefined,
-  profile: 'bicycle',
+  profile: 'road',
   difficultyLevel: 'easy',
   createdAt: Date.now(),
   updatedAt: Date.now(),

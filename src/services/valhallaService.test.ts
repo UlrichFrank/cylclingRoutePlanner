@@ -27,7 +27,7 @@ async function testValhallaService() {
     console.log('✓ Test 2: Calculate Route (Stuttgart → Ludwigsburg)');
     const routeResult = await valhallaService.calculateRoute(
       [STUTTGART_CENTER, LUDWIGSBURG],
-      'bicycle'
+      'road'
     );
     console.log(`  Distance: ${routeResult.distance.toFixed(1)} km`);
     console.log(`  Duration: ${Math.round(routeResult.duration / 60)} minutes`);
@@ -37,7 +37,7 @@ async function testValhallaService() {
     console.log('✓ Test 3: Get Route Statistics');
     const stats = await valhallaService.getRouteStats(
       [STUTTGART_CENTER, LUDWIGSBURG],
-      'bicycle'
+      'road'
     );
     console.log(`  Distance: ${stats.distance.toFixed(1)} km`);
     console.log(`  Duration: ${Math.round(stats.duration / 60)} minutes`);

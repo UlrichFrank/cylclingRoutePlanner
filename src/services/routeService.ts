@@ -79,7 +79,7 @@ export const routeService = {
       description: '',
       waypoints: [],
       geometry: undefined,
-      profile: 'bicycle',
+      profile: 'road',
       difficultyLevel: difficulty,
       createdAt: Date.now(),
       updatedAt: Date.now(),

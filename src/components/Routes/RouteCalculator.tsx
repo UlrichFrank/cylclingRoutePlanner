@@ -8,7 +8,7 @@ import { useRouteStore } from '../../store/routeStore';
 import { valhallaService } from '../../services/valhallaService';
 import { useTheme } from '../Layout/ThemeContext';
 
-type ValhallaProfile = 'bicycle' | 'ebike' | 'pedestrian' | 'bikeshare' | 'scooter';
+type ValhallaProfile = 'mountain' | 'road' | 'gravel';
 
 interface RouteCalculatorProps {
   onRouteCalculated?: () => void;
@@ -18,7 +18,7 @@ export const RouteCalculator: React.FC<RouteCalculatorProps> = ({ onRouteCalcula
   const { theme } = useTheme();
   const isDark = theme === 'dark';
   const { currentRoute, setRoute } = useRouteStore();
-  const [profile, setProfile] = useState<ValhallaProfile>('bicycle');
+  const [profile, setProfile] = useState<ValhallaProfile>('road');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const calcTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -35,11 +35,9 @@ export const RouteCalculator: React.FC<RouteCalculatorProps> = ({ onRouteCalcula
   };
 
   const profileLabels: Record<ValhallaProfile, string> = {
-    bicycle: '🚴 Fahrrad',
-    ebike: '⚡ E-Bike',
-    pedestrian: '🚶 Zu Fuß',
-    bikeshare: '🔄 Leihrad',
-    scooter: '🛴 Roller',
+    mountain: '🏔️ Mountainbike',
+    road: '🚴 Rennrad',
+    gravel: '🛣️ Gravel',
   };
 
   // Auto-calculate route when waypoints change (with debounce)

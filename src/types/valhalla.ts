@@ -3,7 +3,7 @@
  * Type definitions for Valhalla routing API responses
  */
 
-export type ValhallaProfile = 'bicycle' | 'ebike' | 'pedestrian' | 'bikeshare' | 'scooter';
+export type ValhallaProfile = 'mountain' | 'road' | 'gravel';
 
 export interface LatLng {
   lat: number;
@@ -12,7 +12,7 @@ export interface LatLng {
 
 export interface ValhallRouteRequest {
   locations: LatLng[];
-  costing: ValhallaProfile;
+  costing: 'bicycle' | 'car' | 'pedestrian';  // Valhalla costing types
   costing_options?: {
     bicycle?: {
       use_roads?: number;
@@ -132,7 +132,7 @@ export interface RouteStats {
 export interface DistanceMatrixRequest {
   sources: LatLng[];
   targets: LatLng[];
-  costing: ValhallaProfile;
+  costing: 'bicycle' | 'car' | 'pedestrian';  // Valhalla costing types
 }
 
 export interface DistanceMatrixResponse {

@@ -15,7 +15,7 @@ export interface RoutePoint extends RouteCoordinate {
 }
 
 export type DifficultyLevel = 'easy' | 'medium' | 'hard';
-export type ValhallaProfile = 'bicycle' | 'ebike' | 'pedestrian' | 'bikeshare' | 'scooter';
+export type ValhallaProfile = 'mountain' | 'road' | 'gravel';
 
 export interface RouteGeometry {
   geometry: RouteCoordinate[]; // Full route polyline from Valhalla
