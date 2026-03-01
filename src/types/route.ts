@@ -28,12 +28,24 @@ export interface RouteGeometry {
   averageGrade: number; // percentage
 }
 
+export interface RouteStats {
+  distance: number; // km
+  duration: number; // seconds
+  elevationGain: number; // meters
+  elevationLoss: number; // meters
+  maxElevation: number; // meters
+  minElevation: number; // meters
+  averageGrade: number; // percentage
+  difficulty: string; // 'Easy' | 'Moderate' | 'Hard' | 'Expert'
+}
+
 export interface Route {
   id: string;
   name: string;
   description?: string;
   waypoints: RouteCoordinate[]; // User-selected points (start, mid, end)
   geometry?: RouteGeometry; // Calculated route from Valhalla
+  stats?: RouteStats; // Route statistics (distance, elevation, difficulty)
   profile: ValhallaProfile;
   difficultyLevel: DifficultyLevel;
   createdAt: number;
