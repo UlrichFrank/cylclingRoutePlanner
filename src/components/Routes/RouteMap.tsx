@@ -304,47 +304,156 @@ export const RouteMap: React.FC = () => {
           style={{
             position: 'fixed',
             top: `${Math.max(50, contextMenu.y)}px`,
-            left: `${Math.max(10, Math.min(contextMenu.x, window.innerWidth - 200))}px`,
+            left: `${Math.max(10, Math.min(contextMenu.x, window.innerWidth - 250))}px`,
             backgroundColor: 'white',
             border: '2px solid #0ea5e9',
             borderRadius: '6px',
             boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
-            zIndex: 10000, // Very high z-index to ensure visibility
-            minWidth: '180px',
+            zIndex: 10000,
+            minWidth: '220px',
             padding: '4px',
+            maxHeight: '400px',
+            overflowY: 'auto',
           }}
           onClick={(e) => e.stopPropagation()}
         >
-          <button
-            onClick={() => {
-              // Event zum Setzen eines Wegepunkts an dieser Position
-              window.dispatchEvent(
-                new CustomEvent('setWaypoint', {
-                  detail: { lat: contextMenu.lat, lng: contextMenu.lng },
-                })
-              );
-              setContextMenu(null);
-            }}
-            style={{
-              display: 'block',
-              width: '100%',
-              padding: '10px 12px',
-              border: 'none',
-              background: 'none',
-              textAlign: 'left',
-              cursor: 'pointer',
-              fontSize: '14px',
-              color: '#0f172a',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#e0f2fe';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'transparent';
-            }}
-          >
-            📍 Wegepunkt setzen
-          </button>
+          {/* Waypoint modification options */}
+          {currentRoute && currentRoute.waypoints.length > 0 && (
+            <>
+              {currentRoute.waypoints.map((wp: any, index: number) => (
+                <button
+                  key={index}
+                  onClick={() => {
+                    const newWaypoints = [...currentRoute.waypoints];
+                    newWaypoints[index] = { lat: contextMenu.lat, lng: contextMenu.lng };
+                    useRouteStore.setState({
+                      currentRoute: { ...currentRoute, waypoints: newWaypoints }
+                    });
+                    setContextMenu(null);
+                  }}
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    padding: '10px 12px',
+                    border: 'none',
+                    background: 'none',
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    fontSize: '13px',
+                    color: '#0f172a',
+                    borderBottom: index < currentRoute.waypoints.length - 1 ? '1px solid #e0e7ff' : 'none',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = '#e0f2fe';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                  }}
+                >
+                  {index === 0 ? '📍 Start setzen' : index === currentRoute.waypoints.length - 1 ? '🏁 Ziel setzen' : `📍 Punkt ${index + 1} setzen`}
+                </button>
+              ))}
+            </>
+          )}
+
+          {/* Add waypoint at end */}
+          {currentRoute && currentRoute.waypoints.length > 0 && (
+            <button
+              onClick={() => {
+                const newWaypoints = [...currentRoute.waypoints, { lat: contextMenu.lat, lng: contextMenu.lng }];
+                useRouteStore.setState({
+                  currentRoute: { ...currentRoute, waypoints: newWaypoints }
+                });
+                setContextMenu(null);
+              }}
+              style={{
+                display: 'block',
+                width: '100%',
+                padding: '10px 12px',
+                border: 'none',
+                background: 'none',
+                textAlign: 'left',
+                cursor: 'pointer',
+                fontSize: '13px',
+                color: '#0f172a',
+                borderTop: '1px solid #e0e7ff',
+                fontWeight: '600',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#dcfce7';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'transparent';
+              }}
+            >
+              ➕ Wegpunkt hinzufügen
+            </button>
+          )}
+
+          {/* Add first waypoint (start) */}
+          {currentRoute && currentRoute.waypoints.length === 0 && (
+            <button
+              onClick={() => {
+                const newWaypoints = [{ lat: contextMenu.lat, lng: contextMenu.lng }];
+                useRouteStore.setState({
+                  currentRoute: { ...currentRoute, waypoints: newWaypoints }
+                });
+                setContextMenu(null);
+              }}
+              style={{
+                display: 'block',
+                width: '100%',
+                padding: '10px 12px',
+                border: 'none',
+                background: 'none',
+                textAlign: 'left',
+                cursor: 'pointer',
+                fontSize: '13px',
+                color: '#0f172a',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#dcfce7';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'transparent';
+              }}
+            >
+              📍 1. Startpunkt setzen
+            </button>
+          )}
+
+          {/* Add second waypoint (end) if only start exists */}
+          {currentRoute && currentRoute.waypoints.length === 1 && (
+            <button
+              onClick={() => {
+                const newWaypoints = [...currentRoute.waypoints, { lat: contextMenu.lat, lng: contextMenu.lng }];
+                useRouteStore.setState({
+                  currentRoute: { ...currentRoute, waypoints: newWaypoints }
+                });
+                setContextMenu(null);
+              }}
+              style={{
+                display: 'block',
+                width: '100%',
+                padding: '10px 12px',
+                border: 'none',
+                background: 'none',
+                textAlign: 'left',
+                cursor: 'pointer',
+                fontSize: '13px',
+                color: '#0f172a',
+                borderTop: '1px solid #e0e7ff',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#dcfce7';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'transparent';
+              }}
+            >
+              🏁 2. Endpunkt setzen
+            </button>
+          )}
         </div>
       )}
     </div>
