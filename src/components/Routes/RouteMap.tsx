@@ -169,6 +169,9 @@ export const RouteMap: React.FC = () => {
       const geometryToRender = currentRoute.geometry?.geometry || currentRoute.waypoints;
 
       if (geometryToRender.length > 1) {
+        console.log('[RouteMap] Rendering geometry sample:', 
+          geometryToRender.slice(0, 3).map((c: any) => `[${c.lat?.toFixed(4)}, ${c.lng?.toFixed(4)}]`));
+        
         const latlngs = geometryToRender.map((coord: any) => [coord.lat, coord.lng] as [number, number]);
         
         // Color based on difficulty

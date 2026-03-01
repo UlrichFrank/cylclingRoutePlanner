@@ -161,6 +161,10 @@ class ValhallaService {
       const leg = data.trip.legs[0];
       const geometry = decodePolyline(leg.shape);
 
+      console.log('[Valhalla] Raw geometry sample (first 3):', geometry.slice(0, 3));
+      console.log('[Valhalla] Geometry format check:', 
+        geometry.length > 0 ? `First coord: [${geometry[0][0]}, ${geometry[0][1]}]` : 'empty');
+
       if (DEBUG) {
         console.log('[Valhalla] Route calculated:', {
           distance: leg.summary.length,
@@ -193,15 +197,27 @@ class ValhallaService {
 
     // Build elevation request - using the route shape
     try {
+      console.log('[Valhalla] Elevation request - sending coords sample:', 
+        geometry.slice(0, 2).map(c => `[lat:${c[1]?.toFixed(4)}, lon:${c[0]?.toFixed(4)}]`));
+      
+      const elevationPayload = {
+        shape: geometry.map((coord) => ({ lat: coord[1], lon: coord[0] })),
+      };
+      
       const response = await this.fetchWithRetry(`${this.baseUrl}/elevation`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          shape: geometry.map((coord) => ({ lat: coord[1], lon: coord[0] })),
-        }),
+        body: JSON.stringify(elevationPayload),
       });
 
       const data = await response.json();
+      
+      console.log('[Valhalla] Elevation response:', {
+        ok: response.ok,
+        elevationCount: (data.elevation as number[])?.length,
+        firstElevation: (data.elevation as number[])?.[0],
+        lastElevation: (data.elevation as number[])?.[data.elevation?.length - 1],
+      });
 
       if (!response.ok) {
         throw new Error(`Elevation API error: ${(data as ValhallError).status}`);

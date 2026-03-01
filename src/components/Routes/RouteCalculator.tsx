@@ -87,6 +87,9 @@ export const RouteCalculator: React.FC<RouteCalculatorProps> = ({ onRouteCalcula
         lat: coord[1],
         lng: coord[0],
       }));
+      
+      console.log('[RouteCalculator] Converted geometry sample:', geometry.slice(0, 3));
+      console.log('[RouteCalculator] Full geometry length:', geometry.length);
 
       // Update route with calculated geometry
       setRoute({
