@@ -58,6 +58,11 @@ export const RouteMap: React.FC = () => {
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const isDraggingRef = useRef(false);
 
+  // Debug context menu state
+  useEffect(() => {
+    console.log('[ContextMenu] State updated:', contextMenu);
+  }, [contextMenu]);
+
   const currentRoute = useRouteStore((state: any) => state.currentRoute);
   const pois = usePOIStore((state: any) => state.pois);
 
@@ -236,7 +241,9 @@ export const RouteMap: React.FC = () => {
 
     // Handle clicks outside context menu
     const handleClickOutside = (e: MouseEvent) => {
-      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) {
+      // Don't close menu if clicking on the map itself or the menu
+      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node) && 
+          !(e.target as Node).contains?.(mapEl) && !mapEl.contains(e.target as Node)) {
         setContextMenu(null);
       }
     };
@@ -272,6 +279,23 @@ export const RouteMap: React.FC = () => {
           left: 0,
         }}
       />
+
+      {/* Debug: Show context menu state */}
+      {contextMenu && (
+        <div style={{
+          position: 'fixed',
+          top: '10px',
+          right: '10px',
+          backgroundColor: '#22c55e',
+          color: 'white',
+          padding: '8px 12px',
+          borderRadius: '4px',
+          fontSize: '12px',
+          zIndex: 9999,
+        }}>
+          ContextMenu Active: ({Math.round(contextMenu.x)}, {Math.round(contextMenu.y)})
+        </div>
+      )}
 
       {/* Context Menu */}
       {contextMenu && (
