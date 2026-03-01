@@ -30,6 +30,15 @@
 | REQ-012 | Routenlänge berechnen | System berechnet Länge der Route | Länge in km wird angezeigt und aktualisiert sich bei Änderungen |
 | REQ-013 | Höhenprofil anzeigen | Optional: Höhenverlauf der Route | Grafische Darstellung des Höhenprofils (future: mit echten Höhendaten) |
 
+### 1.3b Routenplanung & Berechnung
+
+| ID | Anforderung | Beschreibung | Erfolskriterium |
+|---|---|---|---|
+| REQ-012b | Fahrrad-optimierte Routenberechnung | System plant Routen basierend auf Straßennetz | Route wird zwischen Wegpunkten berechnet, bevorzugt Fahrradwege |
+| REQ-012c | Routenoptimierung nach Kriterien | Route kann nach verschiedenen Kriterien optimiert werden | Optionen: kürzeste Distanz, schnellste Zeit, angenehme Strecke (Vermeidung Hauptstraßen) |
+| REQ-012d | Höhendaten in Routenberechnung | Höhendaten fließen in Berechnung ein | Steigungen und Gefälle werden berücksichtigt, Schwierigkeitslevel wird berechnet |
+| REQ-012e | Verschiedene Transportmodi | System unterstützt verschiedene Fahrtmodi | Modi: Fahrrad (Standard), E-Bike, Rennrad, MTB (Geländefahrten) |
+
 ### 1.4 Punkte von Interesse (POI) & Infrastruktur
 
 | ID | Anforderung | Beschreibung | Erfolskriterium |
@@ -76,12 +85,20 @@
 ### MVP (Phase 1)
 - Routen zeichnen und speichern
 - Grundlegende Kartenfunktionalität
+- Routenlängen-Berechnung
 - POI-Management (einfach)
 - Export/Import als JSON
 - Mock-Daten (keine echten APIs)
 - Browser-Storage Persistierung
 
-### Future Releases (Phase 2+)
+### Phase 2 (Routenplanung)
+- Valhalla-Integration für Routenberechnung
+- Fahrrad-optimierte Routing
+- Höhendaten & Höhenprofil
+- Verschiedene Transportmodi (Bike, E-Bike, MTB, Rennrad)
+- Routenoptimierung nach Kriterien
+
+### Future Releases (Phase 3+)
 - Backend mit SQLite für persistente Speicherung
 - Authentifizierung & Benutzerprofile
 - Teilen von Routen mit anderen Nutzern

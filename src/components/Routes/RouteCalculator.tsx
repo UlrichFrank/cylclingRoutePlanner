@@ -1,0 +1,288 @@
+/**
+ * Route Calculator Component
+ * Handles Valhalla route calculation with profile selection and loading states
+ */
+
+import React, { useState, useRef, useEffect } from 'react';
+import { useRouteStore } from '../../store/routeStore';
+import { valhallaService } from '../../services/valhallaService';
+import { useTheme } from '../Layout/ThemeContext';
+
+type ValhallaProfile = 'bicycle' | 'ebike' | 'pedestrian' | 'bikeshare' | 'scooter';
+
+interface RouteCalculatorProps {
+  onRouteCalculated?: () => void;
+}
+
+export const RouteCalculator: React.FC<RouteCalculatorProps> = ({ onRouteCalculated }) => {
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+  const { currentRoute, setRoute } = useRouteStore();
+  const [profile, setProfile] = useState<ValhallaProfile>('bicycle');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const calcTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastWaypointsRef = useRef<string>('');
+
+  // Color theme
+  const colors = {
+    bg: isDark ? 'hsl(222.2, 84%, 4.9%)' : 'hsl(0, 0%, 100%)',
+    border: isDark ? 'hsl(217.2, 32.6%, 17.5%)' : 'hsl(214.3, 31.8%, 91.4%)',
+    text: isDark ? 'hsl(210, 40%, 98%)' : 'hsl(222.2, 84%, 4.9%)',
+    mutedBg: isDark ? 'hsl(217.2, 32.6%, 17.5%)' : 'hsl(210, 40%, 96%)',
+    primary: '#0ea5e9',
+    error: '#dc2626',
+  };
+
+  const profileLabels: Record<ValhallaProfile, string> = {
+    bicycle: '🚴 Fahrrad',
+    ebike: '⚡ E-Bike',
+    pedestrian: '🚶 Zu Fuß',
+    bikeshare: '🔄 Leihrad',
+    scooter: '🛴 Roller',
+  };
+
+  // Auto-calculate route when waypoints change (with debounce)
+  useEffect(() => {
+    if (calcTimeoutRef.current) clearTimeout(calcTimeoutRef.current);
+
+    const waypointsStr = JSON.stringify(currentRoute?.waypoints);
+    if (waypointsStr === lastWaypointsRef.current) return;
+    lastWaypointsRef.current = waypointsStr;
+
+    if (currentRoute && currentRoute.waypoints.length >= 2 && currentRoute.geometry) {
+      // Auto-recalculate with same profile if waypoints changed
+      calcTimeoutRef.current = setTimeout(() => {
+        handleCalculateRoute();
+      }, 500);
+    }
+
+    return () => {
+      if (calcTimeoutRef.current) clearTimeout(calcTimeoutRef.current);
+    };
+  }, [currentRoute?.waypoints]);
+
+  const handleCalculateRoute = async () => {
+    if (!currentRoute || currentRoute.waypoints.length < 2) {
+      setError('Mindestens 2 Wegpunkte erforderlich');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Convert waypoints to Valhalla format (lat/lon)
+      const locations = currentRoute.waypoints.map((wp) => ({
+        lat: wp.lat,
+        lon: wp.lng,
+      }));
+
+      // Calculate route using Valhalla
+      const routeResult = await valhallaService.calculateRoute(locations, profile);
+
+      // Get full stats including elevation
+      const stats = await valhallaService.getRouteStats(locations, profile);
+
+      // Convert geometry back to our RouteCoordinate format
+      const geometry = routeResult.geometry.map((coord) => ({
+        lat: coord[1],
+        lng: coord[0],
+      }));
+
+      // Update route with calculated geometry
+      setRoute({
+        ...currentRoute,
+        profile,
+        geometry: {
+          geometry,
+          distance: stats.distance,
+          duration: stats.duration,
+          elevationGain: stats.elevationGain,
+          elevationLoss: stats.elevationLoss,
+          maxElevation: stats.maxElevation,
+          minElevation: stats.minElevation,
+          averageGrade: stats.averageGrade,
+        },
+        difficultyLevel: stats.difficulty,
+      });
+
+      onRouteCalculated?.();
+    } catch (err) {
+      // Improved error handling
+      let message = 'Routenberechnung fehlgeschlagen';
+      if (err instanceof Error) {
+        if (err.message.includes('unavailable')) {
+          message = '❌ Valhalla Service nicht erreichbar. Prüfe deine Internetverbindung.';
+        } else if (err.message.includes('invalid')) {
+          message = '❌ Ungültige Wegpunkte. Bitte überprüfe die Koordinaten.';
+        } else {
+          message = `❌ ${err.message}`;
+        }
+      }
+      setError(message);
+      console.error('Route calculation error:', err);
+
+      // Fallback: Use straight line between waypoints if Valhalla fails
+      if (currentRoute && currentRoute.waypoints.length >= 2) {
+        const geometry = currentRoute.waypoints;
+        const distance = currentRoute.waypoints.reduce((sum, wp, idx, arr) => {
+          if (idx === 0) return sum;
+          const prev = arr[idx - 1];
+          const R = 6371;
+          const dLat = ((wp.lat - prev.lat) * Math.PI) / 180;
+          const dLng = ((wp.lng - prev.lng) * Math.PI) / 180;
+          const a =
+            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos((prev.lat * Math.PI) / 180) *
+              Math.cos((wp.lat * Math.PI) / 180) *
+              Math.sin(dLng / 2) *
+              Math.sin(dLng / 2);
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+          return sum + R * c;
+        }, 0);
+
+        setRoute({
+          ...currentRoute,
+          profile,
+          geometry: {
+            geometry,
+            distance,
+            duration: (distance / 20) * 3600, // Estimate 20 km/h
+            elevationGain: 0,
+            elevationLoss: 0,
+            maxElevation: 0,
+            minElevation: 0,
+            averageGrade: 0,
+          },
+          difficultyLevel: 'medium',
+        });
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const hasValidWaypoints = currentRoute && currentRoute.waypoints.length >= 2;
+  const hasGeometry = currentRoute?.geometry !== undefined;
+
+  return (
+    <div
+      style={{
+        padding: '16px',
+        borderBottom: `1px solid ${colors.border}`,
+        backgroundColor: colors.bg,
+      }}
+    >
+      {/* Profile Selector */}
+      <div style={{ marginBottom: '12px' }}>
+        <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '8px', color: colors.text }}>
+          Fahrradtyp
+        </label>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(2, 1fr)',
+            gap: '8px',
+          }}
+        >
+          {Object.entries(profileLabels).map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setProfile(key as ValhallaProfile)}
+              style={{
+                padding: '8px 12px',
+                borderRadius: '6px',
+                border: `2px solid ${profile === key ? colors.primary : colors.border}`,
+                backgroundColor: profile === key ? colors.primary + '20' : colors.mutedBg,
+                color: colors.text,
+                fontSize: '12px',
+                fontWeight: profile === key ? '600' : '400',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Calculate Button */}
+      <button
+        onClick={handleCalculateRoute}
+        disabled={!hasValidWaypoints || isLoading}
+        style={{
+          width: '100%',
+          padding: '12px 16px',
+          backgroundColor: hasValidWaypoints && !isLoading ? colors.primary : colors.mutedBg,
+          border: 'none',
+          borderRadius: '8px',
+          color: hasValidWaypoints && !isLoading ? 'white' : colors.text,
+          fontSize: '14px',
+          fontWeight: '600',
+          cursor: hasValidWaypoints && !isLoading ? 'pointer' : 'not-allowed',
+          opacity: hasValidWaypoints && !isLoading ? 1 : 0.5,
+          transition: 'all 0.2s',
+        }}
+      >
+        {isLoading ? '🔄 Berechne Route...' : '📍 Route berechnen'}
+      </button>
+
+      {/* Route Stats */}
+      {hasGeometry && currentRoute.geometry && (
+        <div
+          style={{
+            marginTop: '12px',
+            padding: '12px',
+            backgroundColor: colors.mutedBg,
+            borderRadius: '8px',
+            fontSize: '12px',
+            color: colors.text,
+          }}
+        >
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div>
+              <div style={{ opacity: 0.7 }}>Entfernung</div>
+              <div style={{ fontSize: '16px', fontWeight: '600' }}>{currentRoute.geometry.distance.toFixed(1)} km</div>
+            </div>
+            <div>
+              <div style={{ opacity: 0.7 }}>Höhenmeter</div>
+              <div style={{ fontSize: '16px', fontWeight: '600' }}>+{currentRoute.geometry.elevationGain} m</div>
+            </div>
+            <div>
+              <div style={{ opacity: 0.7 }}>Steigung</div>
+              <div style={{ fontSize: '16px', fontWeight: '600' }}>{currentRoute.geometry.averageGrade.toFixed(1)}%</div>
+            </div>
+            <div>
+              <div style={{ opacity: 0.7 }}>Schwierigkeit</div>
+              <div style={{ fontSize: '16px', fontWeight: '600' }}>
+                {currentRoute.difficultyLevel === 'easy'
+                  ? '🟢 Leicht'
+                  : currentRoute.difficultyLevel === 'medium'
+                    ? '🟡 Mittel'
+                    : '🔴 Schwer'}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Error Message */}
+      {error && (
+        <div
+          style={{
+            marginTop: '12px',
+            padding: '12px',
+            backgroundColor: colors.error + '20',
+            color: colors.error,
+            borderRadius: '6px',
+            fontSize: '12px',
+          }}
+        >
+          ⚠️ {error}
+        </div>
+      )}
+    </div>
+  );
+};

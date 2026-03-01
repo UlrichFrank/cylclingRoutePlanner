@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  valhalla:
+    image: valhalla/valhalla:latest
+    container_name: travelagent-valhalla
+    ports:
+      - "8002:8002"
+    environment:
+      - tile_urls=https://planet.openstreetmap.org/pbf/{z}/{z}/{x}-{y}.osm.pbf
+      - min_x=-180
+      - min_y=-90
+      - max_x=180
+      - max_y=90
+      - levels=2
+      - force_rebuild=false
+    volumes:
+      - valhalla_data:/valhalla
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  valhalla_data:

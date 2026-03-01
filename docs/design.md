@@ -9,32 +9,40 @@
 │                                                           │
 │  ┌──────────────────┐        ┌──────────────────┐       │
 │  │    Pages/Routes  │        │   Components     │       │
-│  │  - RouteList     │────────│  - RouteMap      │       │
-│  │  - RouteEditor   │        │  - POIList       │       │
-│  │  - RouteDetail   │        │  - POIForm       │       │
-│  └──────────────────┘        │  - Sidebar       │       │
-│           ▲                   └──────────────────┘       │
-│           │                            ▲                 │
-│           └────────────────┬───────────┘                 │
+│  │  - HomePage      │────────│  - RouteMap      │       │
+│  │  - RouteEditor   │        │  - LeftPanel     │       │
+│  └──────────────────┘        │  - RouteInfo     │       │
+│           ▲                   │  - POIList       │       │
+│           │                   └──────────────────┘       │
+│           └────────────────┬───────────────────┘        │
 │                            │                             │
 │                    ┌───────▼────────┐                    │
 │                    │ Zustand Stores │                    │
 │                    │ - routeStore   │                    │
-│                    │ - mapStore     │                    │
 │                    │ - poiStore     │                    │
+│                    │ - mapStore     │                    │
 │                    └───────┬────────┘                    │
 │                            │                             │
-│                    ┌───────▼────────┐                    │
-│                    │    Services    │                    │
-│                    │ - routeService │                    │
-│                    │ - poiService   │                    │
-│                    │ - storageServ. │                    │
-│                    └───────┬────────┘                    │
+│                    ┌───────▼────────────┐                │
+│                    │    Services        │                │
+│                    │ - routeService     │                │
+│                    │ - poiService       │                │
+│                    │ - storageService   │                │
+│                    │ - valhallaService◆ │ (Phase 2)     │
+│                    │ - nominatimService │                │
+│                    │ - overpassService  │                │
+│                    └───────┬────────────┘                │
 │                            │                             │
-│                    ┌───────▼────────┐                    │
-│                    │ Browser Storage│                    │
-│                    │  - localStorage│                    │
-│                    └────────────────┘                    │
+│         ┌──────────────────┼──────────────────┐         │
+│         │                  │                  │         │
+│    ┌────▼──────┐   ┌──────▼──────┐  ┌───────▼─────┐   │
+│    │ localStorage│  │ Nominatim   │  │ Overpass    │   │
+│    │ (Routes)   │  │ (Geocoding) │  │ (POIs)      │   │
+│    └────────────┘  └─────────────┘  └─────────────┘   │
+│                                                          │
+│              ◆ Valhalla API (Phase 2)                   │
+│    http://localhost:8002 (self-hosted or cloud)        │
+│    Profiles: bike, ebike, pedestrian, etc.             │
 │                                                           │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -147,6 +155,14 @@ Value: {
 - clearStorage(): void
 ```
 
+### valhallaService (Phase 2+)
+```typescript
+- calculateRoute(waypoints: Coordinate[], mode: 'bike'|'ebike'|'pedestrian'): RouteGeometry
+- getElevationProfile(route: Route): ElevationData[]
+- calculateRoutingStats(route: Route): { distance, duration, elevation_gain, elevation_loss }
+- getRouteGeometry(waypoints): GeoJSON LineString
+```
+
 ## 5. Component Hierarchy
 
 ```
@@ -240,6 +256,22 @@ App
 **Entscheidung**: Nicht raw Leaflet API
 - **Rationale**: bessere React-Integration
 - **Mapbox**: Nicht im MVP (kostet, externe Abhängigkeit)
+
+### Valhalla für Routenberechnung (Phase 2)
+**Entscheidung**: Valhalla statt OSRM oder Google Directions API
+- **Rationale**: 
+  - Open Source, selbst hostbar
+  - Excellent Fahrrad-Routing ("Bicycle" Profile)
+  - Höhendaten Integration (Elevation API)
+  - Unterstützt Multiple Transportmodi (car, pedestrian, bike, scooter)
+  - Kostenlos selbst zu hosten, keine API-Keys erforderlich
+- **Integration**:
+  - Optional selbst hosten oder use Valhalla API service
+  - Route calculation zwischen Wegpunkten
+  - Elevation-Profil generieren
+  - Routing-Statistiken (Distanz, Zeit, Schwierigkeit)
+- **MVP**: Wegpunkte werden manual erstellt (Haversine distance)
+- **Phase 2**: Valhalla für optimale Fahrraddwege ersetzen
 
 ### TDD Approach
 **Entscheidung**: Tests vor Implementation (REQ-025)
@@ -358,6 +390,8 @@ src/
 |---|---|
 | RouteStore | REQ-001, REQ-003, REQ-004, REQ-005, REQ-006 |
 | MapComponent | REQ-010, REQ-011, REQ-012 |
+| RouteCalculation | REQ-012b, REQ-012c, REQ-012d (Phase 2) |
+| Valhalla Service | REQ-012b, REQ-012c, REQ-012d, REQ-012e (Phase 2) |
 | POIForm/List | REQ-014, REQ-015, REQ-017, REQ-018, REQ-019 |
 | Export/Import | REQ-020, REQ-021 |
 | DifficultyLevel UI | REQ-007, REQ-008, REQ-009 |
@@ -383,14 +417,21 @@ src/
 ## 12. Known Limitations & Future
 
 ### MVP Limitations
-- ❌ Keine echten POI-APIs (nur Mock)
+- ❌ Keine echten Routenberechnung (manuell gezeichnet)
+- ❌ Keine Höhendaten Integration
 - ❌ Keine Benutzerkonten
 - ❌ Keine Cloud-Synchronisation
 - ❌ Keine Offline-Karten
-- ❌ Keine Höhendaten
 - ❌ localStorage-Limit (~5MB)
 
-### Future Enhancements
+### Phase 2 Enhancements (Routing)
+- ✅ Valhalla Integration für Routenberechnung
+- ✅ Fahrrad-optimierte Routing (Fahrradwege bevorzugen)
+- ✅ Höhendaten & Elevation-Profil
+- ✅ Verschiedene Transportmodi
+- ✅ Routenoptimierung (kürzeste/schnellste/angenehmste)
+
+### Future Enhancements (Phase 3+)
 - Real POI APIs (Overpass, Google Places)
 - Backend Server (Node.js + SQLite)
 - User Accounts & Auth
