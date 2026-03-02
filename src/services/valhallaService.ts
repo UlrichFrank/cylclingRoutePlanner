@@ -152,7 +152,8 @@ class ValhallaService {
     };
 
     try {
-      const response = await this.fetchWithRetry(`${this.baseUrl}/route`, {
+      // Use backend proxy for route calculation (CORS-safe)
+      const response = await this.fetchWithRetry(`${BACKEND_API_URL}/route`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(request),
