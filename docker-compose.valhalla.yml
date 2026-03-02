@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  valhalla:
+    image: ghcr.io/valhalla/valhalla:latest
+    container_name: travelagent-valhalla
+    ports:
+      - "8002:8002"
+    volumes:
+      # Persist tiles and config
+      - valhalla-data:/data/valhalla
+    environment:
+      - "VALHALLA_SERVE_PORT=8002"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+
+volumes:
+  valhalla-data:
+    driver: local

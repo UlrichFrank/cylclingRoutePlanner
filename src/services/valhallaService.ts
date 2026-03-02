@@ -107,6 +107,7 @@ function calculateDifficulty(stats: {
 
 export interface ValhallaRouteResult {
   geometry: [number, number][]; // [lng, lat] coordinates
+  polyline: string; // Encoded polyline from Valhalla (for elevation API)
   distance: number; // km
   duration: number; // seconds
   maneuvers: Array<{
@@ -159,13 +160,15 @@ class ValhallaService {
         body: JSON.stringify(request),
       });
 
-      const data: ValhallRouteResponse = await response.json();
+      const response_data = await response.json();
 
       if (!response.ok) {
-        const error = data as unknown as ValhallError;
-        throw new Error(`Valhalla error: ${error.message || error.status}`);
+        const errorMsg = response_data.error || response_data.message || 'Unknown error';
+        throw new Error(`Valhalla error: ${errorMsg}`);
       }
 
+      // Backend wraps response in { success, data, ... }
+      const data: ValhallRouteResponse = response_data.data || response_data;
       const leg = data.trip.legs[0];
       const geometry = decodePolyline(leg.shape);
 
@@ -183,6 +186,7 @@ class ValhallaService {
 
       return {
         geometry,
+        polyline: leg.shape, // Keep the encoded polyline for elevation API
         distance: leg.summary.length,
         duration: leg.summary.time,
         maneuvers: leg.maneuvers.map((m) => ({
@@ -199,148 +203,51 @@ class ValhallaService {
 
   /**
    * Get elevation profile for a route
+   * Pass the polyline from Valhalla response
    */
-  async getElevationProfile(geometry: [number, number][]): Promise<ElevationPoint[]> {
-    if (geometry.length === 0) return [];
+  async getElevationProfile(polylineShape: string): Promise<ElevationPoint[]> {
+    if (!polylineShape || typeof polylineShape !== 'string') return [];
 
-    // Build elevation request - use backend proxy to bypass CORS
     try {
-      // Sampling: reduce number of points to stay within API limits
-      // Send only every Nth point where N depends on geometry size
-      const SAMPLE_SIZE = 500; // Max points to send
-      const sampleStep = Math.max(1, Math.floor(geometry.length / SAMPLE_SIZE));
-      const sampledGeometry = geometry.filter((_, idx) => idx % sampleStep === 0 || idx === geometry.length - 1);
-
-      console.log('[Valhalla] Elevation request - geometry:', geometry.length, 'points, sampled to:', 
-        sampledGeometry.length, '(step:', sampleStep, ')');
-      console.log('[Valhalla] Elevation request - sample coords:', 
-        sampledGeometry.slice(0, 2).map(c => `[lat:${c[0]?.toFixed(4)}, lon:${c[1]?.toFixed(4)}]`));
+      console.log('[Elevation] Requesting elevation for polyline');
       
-      const elevationPayload = {
-        shape: sampledGeometry.map((coord) => ({ lat: coord[0], lon: coord[1] })),
-      };
+      const elevationPayload = { polyline: polylineShape };
       
-      // Use backend proxy endpoint instead of direct Valhalla call
+      // Use backend proxy endpoint to decode polyline and fetch elevations
       const response = await this.fetchWithRetry(`${BACKEND_API_URL}/elevation`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(elevationPayload),
       });
 
-      const data = await response.json();
+      const response_data = await response.json();
       
-      console.log('[Valhalla] Elevation response:', {
+      // Backend wraps response in { success, data, ... }
+      const data = response_data.data || response_data;
+      
+      console.log('[Elevation] Elevation response:', {
         ok: response.ok,
         elevationCount: (data.elevation as number[])?.length,
-        firstElevation: (data.elevation as number[])?.[0],
-        lastElevation: (data.elevation as number[])?.[data.elevation?.length - 1],
+        sampledPoints: data.sampled_points,
       });
 
       if (!response.ok) {
-        throw new Error(`Elevation API error: ${(data as ValhallError).status}`);
+        const errorMsg = (data as unknown as any).error || (data as unknown as any).message || 'Unknown error';
+        throw new Error(`Elevation API error: ${errorMsg}`);
       }
 
-      // Convert response to ElevationPoint array
-      // Interpolate elevation for non-sampled points
-      const sampledElevations = (data.elevation as number[]) || [];
-      const fullElevations = this.interpolateElevations(geometry, sampledGeometry, sampledElevations);
-      
-      return geometry.map((coord, idx) => ({
-        distance: this.calculateDistanceAlongRoute(geometry, idx),
-        elevation: fullElevations[idx] || 0,
-        lat: coord[0],
-        lon: coord[1],
+      // Return elevation array (simple numbers) - will be used by route display
+      const elevations = (data.elevation as number[]) || [];
+      return elevations.map((elevation) => ({
+        distance: 0, // Not needed for new elevation approach
+        elevation: elevation || 0,
+        lat: 0,
+        lon: 0,
       }));
     } catch (error) {
-      console.error('[Valhalla] Elevation fetch failed:', error instanceof Error ? error.message : String(error));
-      // Return empty elevation if service fails (route still displays, just without elevation data)
-      return geometry.map((coord, idx) => ({
-        distance: this.calculateDistanceAlongRoute(geometry, idx),
-        elevation: 0,
-        lat: coord[0],
-        lon: coord[1],
-      }));
+      console.error('[Elevation] Error:', error);
+      return [];
     }
-  }
-
-  /**
-   * Interpolate elevation values for all points based on sampled elevations
-   * Uses linear interpolation between sampled points
-   */
-  private interpolateElevations(
-    fullGeometry: [number, number][],
-    sampledGeometry: [number, number][],
-    sampledElevations: number[]
-  ): number[] {
-    if (sampledElevations.length === 0) return Array(fullGeometry.length).fill(0);
-    if (sampledElevations.length === 1) return Array(fullGeometry.length).fill(sampledElevations[0]);
-
-    const result: number[] = Array(fullGeometry.length);
-    
-    // Build a map of sampled point indices in full geometry
-    const sampledIndices: number[] = [];
-    let sampledIdx = 0;
-    
-    for (let i = 0; i < fullGeometry.length && sampledIdx < sampledGeometry.length; i++) {
-      const fullCoord = fullGeometry[i];
-      const sampledCoord = sampledGeometry[sampledIdx];
-      
-      // Check if this point matches current sampled point
-      if (fullCoord[0] === sampledCoord[0] && fullCoord[1] === sampledCoord[1]) {
-        sampledIndices.push(i);
-        result[i] = sampledElevations[sampledIdx];
-        sampledIdx++;
-      }
-    }
-
-    // Fill in interpolated values for non-sampled points
-    for (let i = 0; i < fullGeometry.length; i++) {
-      if (result[i] !== undefined) {
-        continue; // Already set (sampled point)
-      }
-
-      // Find surrounding sampled points
-      let prevSampledIdx = -1;
-      let nextSampledIdx = -1;
-
-      for (let j = sampledIndices.length - 1; j >= 0; j--) {
-        if (sampledIndices[j] < i) {
-          prevSampledIdx = j;
-          break;
-        }
-      }
-
-      for (let j = 0; j < sampledIndices.length; j++) {
-        if (sampledIndices[j] > i) {
-          nextSampledIdx = j;
-          break;
-        }
-      }
-
-      if (prevSampledIdx >= 0 && nextSampledIdx >= 0) {
-        // Interpolate between prev and next sampled points
-        const prevFullIdx = sampledIndices[prevSampledIdx];
-        const nextFullIdx = sampledIndices[nextSampledIdx];
-        const prevElev = sampledElevations[prevSampledIdx];
-        const nextElev = sampledElevations[nextSampledIdx];
-
-        const distance = i - prevFullIdx;
-        const totalDistance = nextFullIdx - prevFullIdx;
-        const ratio = distance / totalDistance;
-        result[i] = prevElev + (nextElev - prevElev) * ratio;
-      } else if (prevSampledIdx >= 0) {
-        // Use last sampled elevation
-        result[i] = sampledElevations[prevSampledIdx];
-      } else if (nextSampledIdx >= 0) {
-        // Use first sampled elevation
-        result[i] = sampledElevations[nextSampledIdx];
-      } else {
-        // No sampled points (shouldn't happen)
-        result[i] = 0;
-      }
-    }
-
-    return result;
   }
 
   /**
@@ -367,7 +274,8 @@ class ValhallaService {
     profile: ValhallaProfile = 'road'
   ): Promise<RouteStats> {
     const routeResult = await this.calculateRoute(waypoints, profile);
-    const elevationProfile = await this.getElevationProfile(routeResult.geometry);
+    // Pass the polyline (encoded) to elevation service
+    const elevationProfile = await this.getElevationProfile(routeResult.polyline);
 
     const elevations = elevationProfile.map((p) => p.elevation).filter((e) => e > 0);
     const minElevation = elevations.length > 0 ? Math.min(...elevations) : 0;

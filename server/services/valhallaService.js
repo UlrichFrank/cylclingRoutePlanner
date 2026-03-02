@@ -4,7 +4,16 @@
  * Includes retry logic, timeout handling, and error management
  */
 
-const VALHALLA_BASE_URL = process.env.VALHALLA_API_URL || 'https://valhalla1.openstreetmap.de';
+// Ensure SSL environment is configured for corporate proxy compatibility
+if (!process.env.NODE_TLS_REJECT_UNAUTHORIZED && process.env.NODE_ENV !== 'production') {
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+}
+
+// Get VALHALLA_BASE_URL dynamically (after dotenv is loaded by server.js)
+function getValhallaBaseUrl() {
+  return process.env.VALHALLA_API_URL || 'https://valhalla1.openstreetmap.de';
+}
+
 const MAX_RETRIES = 3;
 const TIMEOUT_MS = 30000;
 const INITIAL_BACKOFF_MS = 1000;
@@ -51,7 +60,7 @@ export async function calculateRoute(locations, costing = 'bicycle', costingOpti
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       const response = await fetchWithTimeout(
-        `${VALHALLA_BASE_URL}/route`,
+        `${getValhallaBaseUrl()}/route`,
         payload,
         TIMEOUT_MS
       );
@@ -81,62 +90,78 @@ export async function calculateRoute(locations, costing = 'bicycle', costingOpti
 }
 
 /**
- * Get elevation data for a route geometry
- * @param {Array} shape - Array of {lat, lon} objects
+ * Get elevation data for a route using Open-Elevation API
+ * @param {string} polylineEncoded - Encoded polyline from Valhalla
  * @returns {Promise<Object>} Elevation data with statistics
  */
-export async function getElevationProfile(shape) {
-  if (!Array.isArray(shape) || shape.length === 0) {
-    const error = new Error('Invalid shape: must be non-empty array');
+export async function getElevationProfile(polylineEncoded) {
+  if (!polylineEncoded || typeof polylineEncoded !== 'string') {
+    const error = new Error('Invalid polyline: must be non-empty string');
     error.code = 'INVALID_REQUEST';
     error.statusCode = 400;
     throw error;
   }
 
-  if (!shape.every(point => 
-    typeof point.lat === 'number' && 
-    typeof point.lon === 'number'
-  )) {
-    const error = new Error('Invalid shape format: each point must have numeric lat and lon');
-    error.code = 'INVALID_REQUEST';
-    error.statusCode = 400;
-    throw error;
-  }
+  console.log(`[Elevation] Processing polyline for elevation data`);
 
-  console.log(`[Valhalla] Getting elevation for ${shape.length} points`);
+  try {
+    // Import decoder utilities
+    const { decodePolyline, samplePointsByDistance } = await import('../utils/polylineDecoder.js');
 
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    try {
-      const response = await fetchWithTimeout(
-        `${VALHALLA_BASE_URL}/elevation`,
-        { shape },
-        TIMEOUT_MS
-      );
-
-      // Calculate elevation statistics
-      const elevations = response.elevation || [];
-      const stats = calculateElevationStats(elevations);
-
-      console.log(`[Valhalla] Elevation data retrieved: gain ${stats.elevation_gain}m, loss ${stats.elevation_loss}m`);
-
-      return {
-        ...response,
-        ...stats
-      };
-    } catch (error) {
-      console.error(
-        `[Valhalla] Elevation attempt ${attempt}/${MAX_RETRIES} failed: ${error.message}`
-      );
-
-      if (attempt === MAX_RETRIES) {
-        error.code = error.code || 'ELEVATION_ERROR';
-        error.statusCode = error.statusCode || 503;
-        throw error;
-      }
-
-      const backoffMs = INITIAL_BACKOFF_MS * Math.pow(2, attempt - 1);
-      await new Promise(resolve => setTimeout(resolve, backoffMs));
+    // 1. Decode polyline
+    const allPoints = decodePolyline(polylineEncoded);
+    if (allPoints.length === 0) {
+      throw new Error('Failed to decode polyline');
     }
+    console.log(`[Elevation] Decoded ${allPoints.length} points from polyline`);
+
+    // 2. Sample points every 50m (configurable)
+    const sampleDistance = parseInt(process.env.ELEVATION_SAMPLE_DISTANCE_M || '50');
+    const sampledPoints = samplePointsByDistance(allPoints, sampleDistance);
+    console.log(`[Elevation] Sampled down to ${sampledPoints.length} points (${sampleDistance}m intervals)`);
+
+    // 3. Request elevation for all sampled points in ONE request
+    const elevationResponse = await fetchWithTimeout(
+      process.env.OPEN_ELEVATION_API_URL || 'https://api.open-elevation.com/api/v1/lookup',
+      {
+        locations: sampledPoints.map(p => ({ latitude: p.lat, longitude: p.lon }))
+      },
+      TIMEOUT_MS
+    );
+
+    if (!elevationResponse.results || !Array.isArray(elevationResponse.results)) {
+      throw new Error('Invalid elevation response format');
+    }
+
+    // Extract elevation values
+    const elevations = elevationResponse.results.map(r => r.elevation);
+    const stats = calculateElevationStats(elevations);
+
+    console.log(`[Elevation] Retrieved elevation data: gain ${stats.elevation_gain}m, loss ${stats.elevation_loss}m`);
+
+    return {
+      elevation: elevations,
+      elevation_gain: stats.elevation_gain,
+      elevation_loss: stats.elevation_loss,
+      min_elevation: stats.min_elevation,
+      max_elevation: stats.max_elevation,
+      avg_elevation: stats.avg_elevation,
+      sampled_points: sampledPoints.length
+    };
+  } catch (error) {
+    console.error(`[Elevation] Error retrieving elevation data: ${error.message}`);
+
+    // Graceful degradation - return empty elevation data
+    console.warn('[Elevation] Returning zero elevations (service unavailable)');
+    return {
+      elevation: [],
+      elevation_gain: 0,
+      elevation_loss: 0,
+      min_elevation: 0,
+      max_elevation: 0,
+      avg_elevation: 0,
+      sampled_points: 0
+    };
   }
 }
 

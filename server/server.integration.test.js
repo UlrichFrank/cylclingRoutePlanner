@@ -123,15 +123,15 @@ describe('Route Calculation API - Input Validation', () => {
 
 describe('Elevation API - Input Validation', () => {
   
-  it('should return 400 for empty shape', async () => {
+  it('should return 400 for empty polyline', async () => {
     const response = await request(app)
       .post('/api/elevation')
-      .send({ shape: [] });
+      .send({ polyline: '' });
     expect(response.status).toBe(400);
     expect(response.body.success).toBe(false);
   });
 
-  it('should return 400 for missing shape', async () => {
+  it('should return 400 for missing polyline', async () => {
     const response = await request(app)
       .post('/api/elevation')
       .send({});
@@ -139,14 +139,11 @@ describe('Elevation API - Input Validation', () => {
     expect(response.body.success).toBe(false);
   });
 
-  it('should return 400 for invalid point format', async () => {
+  it('should return 400 for invalid polyline type', async () => {
     const response = await request(app)
       .post('/api/elevation')
       .send({
-        shape: [
-          { lat: 48.7758, lon: 9.1829 },
-          { lat: 'invalid', lon: 9.1899 }
-        ]
+        polyline: 123 // Not a string
       });
     expect(response.status).toBe(400);
     expect(response.body.success).toBe(false);

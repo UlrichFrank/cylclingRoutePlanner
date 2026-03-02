@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # travelAgent Start Script for Unix/Linux/macOS
-# Starts both backend and frontend servers
-# Automatically finds available ports if defaults are taken
+# Starts Backend and Frontend servers
+# Uses public Valhalla API and Open-Elevation API
 
 set -e
 
@@ -63,47 +63,67 @@ if [ "$FRONTEND_PORT" = "0" ]; then
 fi
 echo -e "${GREEN}✅ Frontend port: $FRONTEND_PORT${NC}"
 
-# Start backend
+# Array to store PIDs for cleanup
+declare -a PIDS=()
+
+# Info about services
 echo ""
-echo -e "${GREEN}🚀 Starting Backend Server...${NC}"
-echo "   Command: npm start (in server/)"
+echo -e "${BLUE}🌐 External Services:${NC}"
+echo -e "   Routing:  ${GREEN}https://valhalla1.openstreetmap.de${NC}"
+echo -e "   Elevation: ${GREEN}https://api.open-elevation.com${NC}"
+echo ""
+
+# Start backend
+echo -e "${GREEN}🚀 Starting Backend Server (port $BACKEND_PORT)...${NC}"
 cd "$(dirname "$0")/server"
 PORT=$BACKEND_PORT npm start &
 BACKEND_PID=$!
+PIDS+=($BACKEND_PID)
 cd - > /dev/null
 
 # Wait for backend to start
-sleep 2
+sleep 3
 
 # Start frontend
-echo -e "${GREEN}🚀 Starting Frontend Server...${NC}"
-echo "   Command: pnpm dev --port $FRONTEND_PORT"
+echo -e "${GREEN}🚀 Starting Frontend Server (port $FRONTEND_PORT)...${NC}"
 BACKEND_URL="http://localhost:$BACKEND_PORT/api"
 VITE_BACKEND_API_URL=$BACKEND_URL pnpm dev -- --port $FRONTEND_PORT &
 FRONTEND_PID=$!
+PIDS+=($FRONTEND_PID)
 
+sleep 2
+
+# Summary
 echo ""
-echo -e "${GREEN}✅ Both servers started!${NC}"
+echo -e "${GREEN}✅ All servers started!${NC}"
 echo ""
-echo -e "${BLUE}📱 Frontend:${NC}    http://localhost:$FRONTEND_PORT"
-echo -e "${BLUE}🔧 Backend API:${NC}  $BACKEND_URL"
+echo -e "${BLUE}📱 Services:${NC}"
+echo -e "   Frontend:       ${GREEN}http://localhost:$FRONTEND_PORT${NC}"
+echo -e "   Backend API:    ${GREEN}http://localhost:$BACKEND_PORT/api${NC}"
 echo ""
-echo -e "${YELLOW}💡 Press Ctrl+C to stop both servers${NC}"
+echo -e "${YELLOW}💡 Press Ctrl+C to stop all servers${NC}"
 echo ""
 
 # Handle graceful shutdown
 cleanup() {
     echo ""
     echo -e "${YELLOW}⏹️  Shutting down servers...${NC}"
-    kill $BACKEND_PID 2>/dev/null || true
-    kill $FRONTEND_PID 2>/dev/null || true
-    wait $BACKEND_PID 2>/dev/null || true
-    wait $FRONTEND_PID 2>/dev/null || true
-    echo -e "${GREEN}✅ Servers stopped${NC}"
+    
+    for pid in "${PIDS[@]}"; do
+        kill $pid 2>/dev/null || true
+    done
+    
+    for pid in "${PIDS[@]}"; do
+        wait $pid 2>/dev/null || true
+    done
+    
+    echo -e "${GREEN}✅ All servers stopped${NC}"
     exit 0
 }
 
 trap cleanup SIGINT SIGTERM
 
-# Wait for both processes
+# Wait for all processes
 wait
+
+

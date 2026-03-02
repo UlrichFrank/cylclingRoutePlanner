@@ -3,8 +3,17 @@ import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
 import dbModule from './db.js';
 import { calculateRoute, getElevationProfile } from './services/valhallaService.js';
+
+// Load environment variables from .env file
+// In tests, load from .env.test instead
+if (process.env.NODE_ENV === 'test') {
+  dotenv.config({ path: '.env.test' });
+} else {
+  dotenv.config();
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -53,8 +62,8 @@ app.post('/api/route', async (req, res) => {
       success: true,
       data: result,
       meta: {
-        distance: result.trip?.summary?.length || 0,
-        duration: result.trip?.summary?.time || 0,
+        distance: result.trip?.legs?.[0]?.summary?.length || 0,
+        duration: result.trip?.legs?.[0]?.summary?.time || 0,
         waypoints: locations?.length || 0
       },
       timestamp
@@ -77,16 +86,26 @@ app.post('/api/route', async (req, res) => {
 
 /**
  * Elevation Data Endpoint
- * Returns elevation profile with gain/loss calculations
+ * Accepts polyline from route and returns elevation profile
+ * Uses Open-Elevation API with intelligent sampling
  */
 app.post('/api/elevation', async (req, res) => {
   const timestamp = new Date().toISOString();
   
   try {
-    const { shape } = req.body;
+    const { polyline } = req.body;
 
-    // Use Valhalla service (with retry logic and statistics)
-    const result = await getElevationProfile(shape);
+    if (!polyline || typeof polyline !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing or invalid polyline parameter',
+        code: 'INVALID_REQUEST',
+        timestamp
+      });
+    }
+
+    // Use elevation service (polyline → Open-Elevation API)
+    const result = await getElevationProfile(polyline);
 
     return res.status(200).json({
       success: true,
@@ -199,7 +218,7 @@ app.delete('/api/routes/:id', async (req, res) => {
  * Health Check
  */
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
 /**
