@@ -82,7 +82,7 @@
 
 ## 3. MVP-Scope vs. Future
 
-### MVP (Phase 1)
+### MVP (Phase 1) ✅ DONE
 - Routen zeichnen und speichern
 - Grundlegende Kartenfunktionalität
 - Routenlängen-Berechnung
@@ -91,19 +91,26 @@
 - Mock-Daten (keine echten APIs)
 - Browser-Storage Persistierung
 
-### Phase 2 (Routenplanung)
+### Phase 2 (Routenplanung) ✅ DONE
 - Valhalla-Integration für Routenberechnung
 - Fahrrad-optimierte Routing
 - Höhendaten & Höhenprofil
 - Verschiedene Transportmodi (Bike, E-Bike, MTB, Rennrad)
 - Routenoptimierung nach Kriterien
 
-### Future Releases (Phase 3+)
-- Backend mit SQLite für persistente Speicherung
-- Authentifizierung & Benutzerprofile
+### Phase 3 (Backend & Persistierung) 🔄 IN PROGRESS
+- [ ] SQLite Datenbankschema für Routes, RoutePoints, POIs, RouteGeometry
+- [ ] Express.js Backend mit CRUD-API
+- [ ] Valhalla Proxy mit Retry-Logik & Error Handling
+- [ ] Route Persistierung (statt nur localStorage)
+- [ ] Elevation API mit Gain/Loss-Berechnung
+- [ ] TDD: Unit + Integration + E2E Tests
+- [ ] API Contract-Testing
+
+### Phase 4+ (Advanced Features)
+- Authentifizierung & Benutzerprofile (JWT)
 - Teilen von Routen mit anderen Nutzern
 - Echte POI-APIs (OpenStreetMap Overpass, Google Places)
-- Höhendaten Integration
 - Offline-Karten
 - Route-Statistiken & Analytics
 - Social Features (Kommentare, Bewertungen)

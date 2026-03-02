@@ -279,33 +279,35 @@ App
 - **Test-Struktur**: Component.test.tsx neben Component.tsx
 - **Coverage-Ziel**: ≥ 80% für Business Logic
 
-## 8. File Structure (Target)
+## 8. File Structure (Target) - Phase 3 Backend
 
 ```
 src/
 ├── types/
-│   ├── route.ts           # Route, RoutePoint
-│   ├── poi.ts             # PointOfInterest
-│   └── index.ts           # Re-exports
+│   ├── route.ts
+│   ├── poi.ts
+│   └── index.ts
 │
 ├── store/
-│   ├── routeStore.ts      # Zustand: routes, current, actions
-│   ├── mapStore.ts        # Zustand: map state
-│   ├── poiStore.ts        # Zustand: POI selection/editing
-│   └── index.ts           # Store initialization
+│   ├── routeStore.ts
+│   ├── mapStore.ts
+│   ├── poiStore.ts
+│   └── index.ts
 │
 ├── services/
-│   ├── routeService.ts    # Route CRUD & calculations
-│   ├── poiService.ts      # POI operations
-│   ├── storageService.ts  # localStorage I/O
-│   ├── exportService.ts   # Import/Export JSON
+│   ├── backendRouteService.ts    # NEW: Backend API calls
+│   ├── backendElevationService.ts # NEW: Backend elevation proxy
+│   ├── routeService.ts
+│   ├── poiService.ts
+│   ├── storageService.ts
+│   ├── valhallaService.ts        # (deprecated - moved to backend)
 │   └── index.ts
 │
 ├── hooks/
-│   ├── useRoute.ts        # Custom hook für routeStore
-│   ├── useMap.ts          # Custom hook für mapStore
-│   ├── usePOI.ts          # Custom hook für poiStore
-│   ├── useLocalStorage.ts # localStorage syncing
+│   ├── useRoute.ts
+│   ├── useMap.ts
+│   ├── usePOI.ts
+│   ├── useLocalStorage.ts
 │   └── index.ts
 │
 ├── components/
@@ -319,7 +321,9 @@ src/
 │   │   ├── RouteList.tsx
 │   │   ├── RouteItem.tsx
 │   │   ├── RouteMap.tsx
-│   │   └── RouteInfo.tsx
+│   │   ├── RouteInfo.tsx
+│   │   ├── RouteCalculator.tsx
+│   │   └── ElevationProfile.tsx
 │   │
 │   ├── POIs/
 │   │   ├── POIForm.tsx
@@ -338,14 +342,44 @@ src/
 │   └── RouteDetailPage.tsx
 │
 ├── utils/
-│   ├── validation.ts      # Input-Validierung
-│   ├── calculations.ts    # Geo-Berechnungen
-│   ├── formatting.ts      # UI-Formatierung
-│   └── constants.ts       # Magic numbers, config
+│   ├── validation.ts
+│   ├── calculations.ts
+│   ├── formatting.ts
+│   └── constants.ts
 │
 ├── App.tsx
 ├── App.css
 └── index.tsx
+
+server/
+├── db.js                    # NEW: SQLite initialization
+├── server.js                # Express app (refactored)
+│
+├── services/                # NEW
+│   ├── valhallaService.js   # Valhalla API wrapper
+│   ├── elevationService.js  # Elevation calculations
+│   ├── routeService.js      # Route CRUD
+│   └── index.js
+│
+├── routes/                  # NEW
+│   ├── routeRoutes.js       # Route API endpoints
+│   ├── elevationRoutes.js   # Elevation API endpoint
+│   └── index.js
+│
+├── middleware/              # NEW
+│   ├── errorHandler.js      # Error handling
+│   ├── validation.js        # Input validation
+│   └── index.js
+│
+├── tests/                   # NEW
+│   ├── routes.test.js       # Route calculation tests
+│   ├── elevation.test.js    # Elevation tests
+│   ├── routes-db.test.js    # CRUD tests
+│   └── e2e.test.js          # End-to-end tests
+│
+├── package.json
+├── server.test.js           # Main test runner
+└── README.md
 ```
 
 ## 9. API Contracts (localStorage)

@@ -3,11 +3,15 @@ import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import dbModule from './db.js';
+import { calculateRoute, getElevationProfile } from './services/valhallaService.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3001;
 const ROUTES_FILE = path.join(__dirname, 'routes.json');
+
+let db; // Will be initialized after DB init
 
 // Middleware
 app.use(cors({
@@ -32,93 +36,76 @@ function saveRoutes(routes) {
 }
 
 /**
- * Route Proxy Endpoint
- * Forwards route requests to Valhalla to bypass CORS
+ * Route Calculation Endpoint (TDD Green Phase)
+ * Uses Valhalla service with retry logic and structured error handling
  */
 app.post('/api/route', async (req, res) => {
+  const timestamp = new Date().toISOString();
+  
   try {
-    const { locations, costing, costing_options, units } = req.body;
+    const { locations, costing, costing_options } = req.body;
 
-    if (!locations || !Array.isArray(locations) || locations.length < 2) {
-      return res.status(400).json({ error: 'Missing or invalid locations array (min 2 required)' });
-    }
+    // Use Valhalla service (with retry logic)
+    const result = await calculateRoute(locations, costing, costing_options);
 
-    console.log('[Route] Request for', locations.length, 'waypoints, costing:', costing);
-
-    const response = await fetch('https://valhalla1.openstreetmap.de/route', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ locations, costing, costing_options, units }),
+    // Structured success response
+    return res.status(200).json({
+      success: true,
+      data: result,
+      meta: {
+        distance: result.trip?.summary?.length || 0,
+        duration: result.trip?.summary?.time || 0,
+        waypoints: locations?.length || 0
+      },
+      timestamp
     });
-
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => response.statusText);
-      console.error('[Route] Error from Valhalla:', response.status, errorText);
-      return res.status(response.status).json({ 
-        error: `Valhalla API error: ${response.status}`,
-        details: errorText 
-      });
-    }
-
-    const data = await response.json().catch((parseErr) => {
-      console.error('[Route] Failed to parse JSON:', parseErr.message);
-      throw new Error(`Failed to parse Valhalla response: ${parseErr.message}`);
-    });
-
-    console.log('[Route] Got route with', data.trip?.legs?.[0]?.shape?.length, 'geometry points');
-    
-    res.json(data);
   } catch (error) {
-    console.error('[Route] Error:', error.message);
-    res.status(500).json({ error: error.message });
+    // Structured error response (not "undefined"!)
+    const statusCode = error.statusCode || 500;
+    const code = error.code || 'UNKNOWN_ERROR';
+    
+    console.error(`[API /route] ${code}:`, error.message);
+
+    return res.status(statusCode).json({
+      success: false,
+      error: error.message,
+      code,
+      timestamp
+    });
   }
 });
 
 /**
- * Elevation Proxy Endpoint
- * Forwards requests to Valhalla elevation API to bypass CORS
+ * Elevation Data Endpoint
+ * Returns elevation profile with gain/loss calculations
  */
 app.post('/api/elevation', async (req, res) => {
+  const timestamp = new Date().toISOString();
+  
   try {
     const { shape } = req.body;
 
-    if (!shape || !Array.isArray(shape)) {
-      return res.status(400).json({ error: 'Missing or invalid shape array' });
-    }
+    // Use Valhalla service (with retry logic and statistics)
+    const result = await getElevationProfile(shape);
 
-    console.log('[Elevation] Request for', shape.length, 'points');
-
-    // Validate shape format
-    if (shape.some((point) => typeof point.lat !== 'number' || typeof point.lon !== 'number')) {
-      return res.status(400).json({ error: 'Invalid shape format: each point must have lat and lon' });
-    }
-
-    const response = await fetch('https://valhalla1.openstreetmap.de/elevation', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ shape }),
+    return res.status(200).json({
+      success: true,
+      data: result,
+      timestamp
     });
-
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => response.statusText);
-      console.error('[Elevation] Error from Valhalla:', response.status, errorText);
-      return res.status(response.status).json({ 
-        error: `Valhalla API error: ${response.status}`,
-        details: errorText 
-      });
-    }
-
-    const data = await response.json().catch((parseErr) => {
-      console.error('[Elevation] Failed to parse JSON:', parseErr.message);
-      throw new Error(`Failed to parse Valhalla response: ${parseErr.message}`);
-    });
-
-    console.log('[Elevation] Got', data.elevation?.length, 'elevation points');
-    
-    res.json(data);
   } catch (error) {
-    console.error('[Elevation] Error:', error.message);
-    res.status(500).json({ error: error.message });
+    // Structured error response
+    const statusCode = error.statusCode || 500;
+    const code = error.code || 'UNKNOWN_ERROR';
+    
+    console.error(`[API /elevation] ${code}:`, error.message);
+
+    return res.status(statusCode).json({
+      success: false,
+      error: error.message,
+      code,
+      timestamp
+    });
   }
 });
 
@@ -233,16 +220,42 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Not Found' });
 });
 
-// Start server
-const server = app.listen(PORT, () => {
-  console.log(`\n✅ travelAgent Backend running on http://localhost:${PORT}`);
-  console.log(`   API: http://localhost:${PORT}/api`);
-  console.log(`   Health: http://localhost:${PORT}/health`);
-  console.log(`   Routes file: ${ROUTES_FILE}\n`);
-});
+/**
+ * Initialization and Server Start
+ */
+async function startServer() {
+  try {
+    // Initialize database
+    db = await dbModule.initDatabase();
+    console.log('[DB] Database initialized');
+    
+    // Start server
+    const server = app.listen(PORT, () => {
+      console.log(`\n✅ travelAgent Backend running on http://localhost:${PORT}`);
+      console.log(`   API: http://localhost:${PORT}/api`);
+      console.log(`   Health: http://localhost:${PORT}/health`);
+      console.log(`   Routes file: ${ROUTES_FILE}\n`);
+    });
 
-// Handle server errors
-server.on('error', (err) => {
-  console.error('[Server Error]', err.message);
-  process.exit(1);
-});
+    // Handle server errors
+    server.on('error', (err) => {
+      console.error('[Server Error]', err.message);
+      process.exit(1);
+    });
+
+    // Graceful shutdown
+    process.on('SIGINT', () => {
+      console.log('\n[Server] Shutting down...');
+      dbModule.closeDatabase();
+      server.close(() => {
+        console.log('[Server] Closed');
+        process.exit(0);
+      });
+    });
+  } catch (error) {
+    console.error('[Startup Error]', error.message);
+    process.exit(1);
+  }
+}
+
+startServer();

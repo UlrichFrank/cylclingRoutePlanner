@@ -225,45 +225,6 @@ export const RouteCalculator: React.FC<RouteCalculatorProps> = ({ onRouteCalcula
         {isLoading ? '🔄 Berechne Route...' : '📍 Route berechnen'}
       </button>
 
-      {/* Route Stats */}
-      {hasGeometry && currentRoute.geometry && (
-        <div
-          style={{
-            marginTop: '12px',
-            padding: '12px',
-            backgroundColor: colors.mutedBg,
-            borderRadius: '8px',
-            fontSize: '12px',
-            color: colors.text,
-          }}
-        >
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <div>
-              <div style={{ opacity: 0.7 }}>Entfernung</div>
-              <div style={{ fontSize: '16px', fontWeight: '600' }}>{currentRoute.geometry.distance.toFixed(1)} km</div>
-            </div>
-            <div>
-              <div style={{ opacity: 0.7 }}>Höhenmeter</div>
-              <div style={{ fontSize: '16px', fontWeight: '600' }}>+{currentRoute.geometry.elevationGain} m</div>
-            </div>
-            <div>
-              <div style={{ opacity: 0.7 }}>Steigung</div>
-              <div style={{ fontSize: '16px', fontWeight: '600' }}>{currentRoute.geometry.averageGrade.toFixed(1)}%</div>
-            </div>
-            <div>
-              <div style={{ opacity: 0.7 }}>Schwierigkeit</div>
-              <div style={{ fontSize: '16px', fontWeight: '600' }}>
-                {currentRoute.difficultyLevel === 'easy'
-                  ? '🟢 Leicht'
-                  : currentRoute.difficultyLevel === 'medium'
-                    ? '🟡 Mittel'
-                    : '🔴 Schwer'}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Error Message */}
       {error && (
         <div
