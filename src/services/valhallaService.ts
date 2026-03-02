@@ -275,46 +275,67 @@ class ValhallaService {
     if (sampledElevations.length === 1) return Array(fullGeometry.length).fill(sampledElevations[0]);
 
     const result: number[] = Array(fullGeometry.length);
-
-    // Find indices of sampled points in full geometry
+    
+    // Build a map of sampled point indices in full geometry
+    const sampledIndices: number[] = [];
     let sampledIdx = 0;
-    for (let i = 0; i < fullGeometry.length; i++) {
+    
+    for (let i = 0; i < fullGeometry.length && sampledIdx < sampledGeometry.length; i++) {
       const fullCoord = fullGeometry[i];
+      const sampledCoord = sampledGeometry[sampledIdx];
       
-      // Find which sampled point this corresponds to
-      if (sampledIdx < sampledGeometry.length && 
-          fullCoord[0] === sampledGeometry[sampledIdx][0] && 
-          fullCoord[1] === sampledGeometry[sampledIdx][1]) {
-        // This is a sampled point
+      // Check if this point matches current sampled point
+      if (fullCoord[0] === sampledCoord[0] && fullCoord[1] === sampledCoord[1]) {
+        sampledIndices.push(i);
         result[i] = sampledElevations[sampledIdx];
         sampledIdx++;
-      } else if (sampledIdx > 0 && sampledIdx < sampledGeometry.length) {
-        // Interpolate between previous and next sampled points
-        const prevElev = sampledElevations[sampledIdx - 1];
-        const nextElev = sampledElevations[sampledIdx];
-        
-        // Find how many points are between previous and next sampled
-        const prevIdx = fullGeometry.findIndex(
-          (c) => c[0] === sampledGeometry[sampledIdx - 1][0] && c[1] === sampledGeometry[sampledIdx - 1][1]
-        );
-        const nextIdx = fullGeometry.findIndex(
-          (c) => c[0] === sampledGeometry[sampledIdx][0] && c[1] === sampledGeometry[sampledIdx][1]
-        );
-        
-        if (prevIdx >= 0 && nextIdx >= 0) {
-          const distance = i - prevIdx;
-          const totalDistance = nextIdx - prevIdx;
-          const ratio = totalDistance > 0 ? distance / totalDistance : 0;
-          result[i] = prevElev + (nextElev - prevElev) * ratio;
-        } else {
-          result[i] = prevElev;
+      }
+    }
+
+    // Fill in interpolated values for non-sampled points
+    for (let i = 0; i < fullGeometry.length; i++) {
+      if (result[i] !== undefined) {
+        continue; // Already set (sampled point)
+      }
+
+      // Find surrounding sampled points
+      let prevSampledIdx = -1;
+      let nextSampledIdx = -1;
+
+      for (let j = sampledIndices.length - 1; j >= 0; j--) {
+        if (sampledIndices[j] < i) {
+          prevSampledIdx = j;
+          break;
         }
-      } else if (sampledIdx === 0) {
-        // Before first sampled point
-        result[i] = sampledElevations[0];
+      }
+
+      for (let j = 0; j < sampledIndices.length; j++) {
+        if (sampledIndices[j] > i) {
+          nextSampledIdx = j;
+          break;
+        }
+      }
+
+      if (prevSampledIdx >= 0 && nextSampledIdx >= 0) {
+        // Interpolate between prev and next sampled points
+        const prevFullIdx = sampledIndices[prevSampledIdx];
+        const nextFullIdx = sampledIndices[nextSampledIdx];
+        const prevElev = sampledElevations[prevSampledIdx];
+        const nextElev = sampledElevations[nextSampledIdx];
+
+        const distance = i - prevFullIdx;
+        const totalDistance = nextFullIdx - prevFullIdx;
+        const ratio = distance / totalDistance;
+        result[i] = prevElev + (nextElev - prevElev) * ratio;
+      } else if (prevSampledIdx >= 0) {
+        // Use last sampled elevation
+        result[i] = sampledElevations[prevSampledIdx];
+      } else if (nextSampledIdx >= 0) {
+        // Use first sampled elevation
+        result[i] = sampledElevations[nextSampledIdx];
       } else {
-        // After last sampled point
-        result[i] = sampledElevations[sampledElevations.length - 1];
+        // No sampled points (shouldn't happen)
+        result[i] = 0;
       }
     }
 
