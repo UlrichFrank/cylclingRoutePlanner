@@ -149,13 +149,25 @@ async function fetchWithTimeout(url, payload, timeoutMs) {
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const response = await fetch(url, {
+    // For HTTPS URLs (like Valhalla), we need to handle self-signed certificates
+    // This is common in corporate/offline environments
+    const fetchOptions = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
       signal: controller.signal,
       timeout: timeoutMs
-    });
+    };
+
+    // Add HTTPS agent for self-signed certs if using https
+    if (url.startsWith('https://')) {
+      const https = await import('https');
+      fetchOptions.agent = new https.Agent({
+        rejectUnauthorized: false  // Allow self-signed certificates
+      });
+    }
+
+    const response = await fetch(url, fetchOptions);
 
     if (!response.ok) {
       let errorText = '';
