@@ -340,33 +340,16 @@ export const LeftPanel: React.FC = () => {
   const handleWaypointKeyPress = async (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== 'Enter') return;
     
-    const value = waypoints[index].placeholder.trim();
-    if (!value) return;
-
-    const newWaypoints = [...waypoints];
+    const suggestions = autocompleteSuggestions;
     
-    // Try to parse as coordinates (lat,lng)
-    const coordMatch = value.match(/^(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)$/);
-    if (coordMatch) {
-      const lat = parseFloat(coordMatch[1]);
-      const lng = parseFloat(coordMatch[2]);
-      if (!isNaN(lat) && !isNaN(lng)) {
-        newWaypoints[index].lat = lat;
-        newWaypoints[index].lng = lng;
-        newWaypoints[index].isLocked = true;
-        setWaypoints(newWaypoints);
-        return;
-      }
+    // If there are suggestions, select the first one
+    if (suggestions && suggestions.length > 0) {
+      handleSelectSuggestion(index, suggestions[0]);
+      return;
     }
-
-    // Try geocoding
-    const coords = await geocodeAddress(value);
-    if (coords) {
-      newWaypoints[index].lat = coords.lat;
-      newWaypoints[index].lng = coords.lng;
-      newWaypoints[index].isLocked = true;
-      setWaypoints(newWaypoints);
-    }
+    
+    // Otherwise, do nothing (don't auto-navigate on Enter)
+    // The user must explicitly click a suggestion to navigate
   };
 
   const handleUnlockWaypoint = (index: number) => {

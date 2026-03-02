@@ -251,8 +251,8 @@ class ValhallaService {
         lon: coord[1],
       }));
     } catch (error) {
-      if (DEBUG) console.error('[Valhalla] Elevation fetch failed:', error);
-      // Return empty elevation if service fails
+      console.error('[Valhalla] Elevation fetch failed:', error instanceof Error ? error.message : String(error));
+      // Return empty elevation if service fails (route still displays, just without elevation data)
       return geometry.map((coord, idx) => ({
         distance: this.calculateDistanceAlongRoute(geometry, idx),
         elevation: 0,
