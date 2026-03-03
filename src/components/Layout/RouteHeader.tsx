@@ -38,11 +38,26 @@ export function RouteHeader() {
   };
 
   return (
+    <Box 
+      style={{ 
+        position: 'fixed',
+        top: '8px',
+        left: '2%',
+        right: 'auto',
+        zIndex: 1000,
+        width: 'calc(100% - 2% - 8px - 384px - 20px)',
+        maxWidth: '1200px',
+      }}
+    >
+      {/* Header Box */}
       <Box
         style={{
-          borderRadius: '8px',
+          borderRadius: '32px',
+          border: '1px solid var(--gray-6)',
           padding: '8px 12px',
           backgroundColor: 'var(--color-background)',
+          backdropFilter: 'blur(8px)',
+          boxShadow: '0 10px 40px rgba(0,0,0,0.1)',
         }}
       >
         <Flex justify="between" align="center" gap="4">
@@ -89,5 +104,6 @@ export function RouteHeader() {
           </Box>
         </Flex>
       </Box>
+    </Box>
   );
 }

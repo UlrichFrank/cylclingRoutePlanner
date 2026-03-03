@@ -6,6 +6,7 @@ import { usePOIStore } from '../../store/poiStore';
 import { useTheme } from '../Layout/ThemeContext';
 import { POI_COLORS } from '../../types/poi';
 import { fetchPOIs } from '../../services/overpassService';
+import { LocationSuggestions, LocationSuggestion } from './LocationSuggestions';
 import { RouteCalculator } from './RouteCalculator';
 
 interface Waypoint {
@@ -93,6 +94,8 @@ export const LeftPanel: React.FC = () => {
   const [autocompleteSuggestions, setAutocompleteSuggestions] = useState<any[]>([]);
   const [autocompleteLoading, setAutocompleteLoading] = useState(false);
   const [activeWaypointIndex, setActiveWaypointIndex] = useState<number | null>(null);
+  const [showLocationSuggestions, setShowLocationSuggestions] = useState<number | null>(null);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [fetchFailed, setFetchFailed] = useState(false);
@@ -109,6 +112,23 @@ export const LeftPanel: React.FC = () => {
     { key: 'hotel', icon: '🏨', label: 'Hotels' },
     { key: 'attraction', icon: '⭐', label: 'Sehenswürdigkeiten' },
   ];
+
+  // Get user geolocation
+  useEffect(() => {
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setUserLocation({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          });
+        },
+        () => {
+          console.log('[LeftPanel] Geolocation denied or unavailable');
+        }
+      );
+    }
+  }, []);
 
   // Auto-update route coordinates when waypoints change
   useEffect(() => {
@@ -359,6 +379,28 @@ export const LeftPanel: React.FC = () => {
     setWaypoints(newWaypoints);
   };
 
+  const handleSelectLocation = (index: number, suggestion: LocationSuggestion) => {
+    const newWaypoints = [...waypoints];
+    newWaypoints[index].lat = suggestion.lat;
+    newWaypoints[index].lng = suggestion.lng;
+    newWaypoints[index].isLocked = true;
+    newWaypoints[index].placeholder = suggestion.label;
+    setWaypoints(newWaypoints);
+    setShowLocationSuggestions(null);
+    setAutocompleteSuggestions([]);
+
+    // Dispatch event to navigate map to this location
+    window.dispatchEvent(
+      new CustomEvent('navigateToWaypoint', {
+        detail: {
+          lat: suggestion.lat,
+          lng: suggestion.lng,
+          label: newWaypoints[index].label,
+        },
+      })
+    );
+  };
+
   const handleAddWaypoint = () => {
     if (waypoints.length < waypointLabels.length) {
       setWaypoints([
@@ -454,10 +496,6 @@ export const LeftPanel: React.FC = () => {
             borderBottom: `1px solid ${colors.border}`,
           }}
         >
-          <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ fontSize: '16px', fontWeight: 'bold' }}>Wegpunkte</div>
-          </div>
-
           {/* Waypoint Inputs */}
           <div style={{ marginBottom: '16px' }}>
             {waypoints.map((wp, idx) => (
@@ -469,6 +507,7 @@ export const LeftPanel: React.FC = () => {
                     value={wp.placeholder}
                     onChange={(e) => handleWaypointChange(idx, e.target.value)}
                     onKeyPress={(e) => handleWaypointKeyPress(idx, e)}
+                    onFocus={() => !wp.isLocked && setShowLocationSuggestions(idx)}
                     disabled={wp.isLocked}
                     style={{
                       width: '100%',
@@ -484,6 +523,15 @@ export const LeftPanel: React.FC = () => {
                       opacity: wp.isLocked ? 0.6 : 1,
                       cursor: wp.isLocked ? 'not-allowed' : 'text',
                     }}
+                  />
+                  
+                  {/* Location Suggestions Dropdown */}
+                  <LocationSuggestions
+                    isOpen={showLocationSuggestions === idx && !wp.isLocked}
+                    onSelectLocation={(suggestion) => handleSelectLocation(idx, suggestion)}
+                    onClose={() => setShowLocationSuggestions(null)}
+                    currentLat={userLocation?.lat}
+                    currentLng={userLocation?.lng}
                   />
                   
                   {/* Autocomplete Dropdown */}
