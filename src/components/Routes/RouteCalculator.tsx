@@ -93,6 +93,8 @@ export const RouteCalculator: React.FC<RouteCalculatorProps> = ({ onRouteCalcula
       console.log('[RouteCalculator] Full geometry length:', geometry.length);
 
       // Update route with calculated geometry
+      console.log('[RouteCalculator] Setting geometry with elevation array length:', stats.elevationArray?.length, 'vs geometry length:', geometry.length);
+      
       setRoute({
         ...currentRoute,
         profile,

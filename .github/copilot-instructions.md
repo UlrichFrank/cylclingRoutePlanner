@@ -135,5 +135,23 @@ When starting a feature, clarify:
 - Type definitions in `src/types/`
 - Store patterns in `src/store/`
 
+## Copilot Workflow Standards
+
+### Documentation & Reference Files
+- Always consult `docs/requirements.md`, `docs/design.md`, and `docs/implementation.md` before implementing features
+- `.github/copilot-instructions.md` contains project-specific conventions and standards
+- Update documentation when design decisions change or new patterns are established
+
+### Destructive Actions
+Copilot will **request explicit confirmation** before executing any destructive operations:
+- Deleting or modifying files/directories
+- Removing or overwriting existing code
+- Git operations (rebase, force-push, deleting branches)
+- Database operations (drop, truncate, delete)
+- Major refactorings affecting existing code
+- Any irreversible changes
+
+Confirmation is requested via the ask_user tool before proceeding.
+
 ## Remember
 This project follows **Test-Driven Development** strictly. Tests are written before implementation and serve as executable specifications.

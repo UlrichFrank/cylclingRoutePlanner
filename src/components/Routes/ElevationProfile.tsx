@@ -48,6 +48,8 @@ export const ElevationProfile: React.FC<ElevationProfileProps> = ({
     // Use stored elevation array if available
     const elevations = geometry.elevation || [];
     
+    console.log('[ElevationProfile] Geometry length:', geometry.geometry.length, 'Elevation length:', elevations.length);
+    
     // Calculate distance along route for each point (cumulative, O(n) instead of O(n²))
     const data: ElevationPoint[] = [];
     let cumulativeDistance = 0; // km
@@ -75,7 +77,7 @@ export const ElevationProfile: React.FC<ElevationProfileProps> = ({
       
       data.push({
         distance: Math.round(cumulativeDistance * 10) / 10, // km
-        elevation: elevations[idx] || 0, // Use stored elevation or 0
+        elevation: elevations[idx] !== undefined ? elevations[idx] : 0, // Handle 0 elevation correctly
       });
     }
 
@@ -83,6 +85,7 @@ export const ElevationProfile: React.FC<ElevationProfileProps> = ({
       console.log(`[ElevationProfile] Calculated ${data.length} elevation points`);
       console.log(`[ElevationProfile] Distance range: 0 - ${data[data.length - 1].distance} km`);
       console.log(`[ElevationProfile] Expected total: ${geometry.distance?.toFixed(1) || 'N/A'} km`);
+      console.log(`[ElevationProfile] Last elevation values:`, data.slice(-5).map(d => `${d.distance}km: ${d.elevation}m`));
     }
 
     return data;

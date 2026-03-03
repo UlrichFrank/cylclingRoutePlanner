@@ -246,13 +246,18 @@ class ValhallaService {
       // Return elevation array (simple numbers) - will be used by route display
       const elevations = (data.elevation as number[]) || [];
       
+      console.log('[Elevation] Raw elevations length:', elevations.length);
+      console.log('[Elevation] Sample elevations:', elevations.slice(0, 5), '...', elevations.slice(-5));
+      
       // Store pre-calculated stats in a special property for route stats
       const result = elevations.map((elevation) => ({
         distance: 0, // Not needed for new elevation approach
-        elevation: elevation || 0,
+        elevation: elevation !== undefined ? elevation : 0,
         lat: 0,
         lon: 0,
       })) as any;
+      
+      console.log('[Elevation] Mapped result length:', result.length);
       
       // Attach backend-calculated stats to the array for getRouteStats() to use
       result._stats = {
