@@ -108,19 +108,35 @@ export async function getElevationProfile(polylineEncoded) {
     // Import decoder utilities
     const { decodePolyline, samplePointsByDistance } = await import('../utils/polylineDecoder.js');
 
-    // 1. Decode polyline
+    // 1. Decode full polyline geometry
     const allPoints = decodePolyline(polylineEncoded);
     if (allPoints.length === 0) {
       throw new Error('Failed to decode polyline');
     }
-    console.log(`[Elevation] Decoded ${allPoints.length} points from polyline`);
+    console.log(`[Elevation] Decoded ${allPoints.length} points from polyline (FULL geometry)`);
 
-    // 2. Sample points every 50m (configurable)
+    // 2. Sample points every 50m for elevation lookup (API efficiency)
     const sampleDistance = parseInt(process.env.ELEVATION_SAMPLE_DISTANCE_M || '50');
     const sampledPoints = samplePointsByDistance(allPoints, sampleDistance);
-    console.log(`[Elevation] Sampled down to ${sampledPoints.length} points (${sampleDistance}m intervals)`);
+    const sampledIndices = [];
+    
+    // Build map of sampled point indices
+    let sampledIdx = 0;
+    for (let i = 0; i < allPoints.length; i++) {
+      if (sampledIdx < sampledPoints.length) {
+        const sp = sampledPoints[sampledIdx];
+        const cp = allPoints[i];
+        // Check if point matches sampled point (with tolerance)
+        if (Math.abs(sp.lat - cp.lat) < 0.0001 && Math.abs(sp.lon - cp.lon) < 0.0001) {
+          sampledIndices.push(i);
+          sampledIdx++;
+        }
+      }
+    }
+    
+    console.log(`[Elevation] Sampled ${sampledIndices.length} points for API lookup (${sampleDistance}m intervals)`);
 
-    // 3. Request elevation for all sampled points in ONE request
+    // 3. Request elevation for sampled points only
     const elevationResponse = await fetchWithTimeout(
       process.env.OPEN_ELEVATION_API_URL || 'https://api.open-elevation.com/api/v1/lookup',
       {
@@ -133,27 +149,68 @@ export async function getElevationProfile(polylineEncoded) {
       throw new Error('Invalid elevation response format');
     }
 
-    // Extract elevation values
-    const elevations = elevationResponse.results.map(r => r.elevation);
-    const stats = calculateElevationStats(elevations);
-
+    // 4. Build full elevation array by interpolating
+    const sampledElevations = elevationResponse.results.map(r => r.elevation);
+    const fullElevations = new Array(allPoints.length);
+    
+    // Populate sampled points first
+    for (let i = 0; i < sampledIndices.length; i++) {
+      fullElevations[sampledIndices[i]] = sampledElevations[i];
+    }
+    
+    // Interpolate remaining points
+    for (let i = 0; i < fullElevations.length; i++) {
+      if (fullElevations[i] === undefined) {
+        // Find nearest sampled indices (before and after)
+        let beforeIdx = -1;
+        let afterIdx = -1;
+        
+        for (let j = 0; j < sampledIndices.length; j++) {
+          if (sampledIndices[j] < i) {
+            beforeIdx = j;
+          } else if (sampledIndices[j] > i) {
+            afterIdx = j;
+            break;
+          }
+        }
+        
+        if (beforeIdx === -1) {
+          // Before first sample
+          fullElevations[i] = sampledElevations[0];
+        } else if (afterIdx === -1) {
+          // After last sample
+          fullElevations[i] = sampledElevations[sampledElevations.length - 1];
+        } else {
+          // Linear interpolation
+          const i1 = sampledIndices[beforeIdx];
+          const i2 = sampledIndices[afterIdx];
+          const e1 = sampledElevations[beforeIdx];
+          const e2 = sampledElevations[afterIdx];
+          const ratio = (i - i1) / (i2 - i1);
+          fullElevations[i] = e1 + (e2 - e1) * ratio;
+        }
+      }
+    }
+    
+    console.log(`[Elevation] Interpolated to ${fullElevations.length} points (100% coverage)`);
+    
+    const stats = calculateElevationStats(fullElevations);
     console.log(`[Elevation] Retrieved elevation data: gain ${stats.elevation_gain}m, loss ${stats.elevation_loss}m`);
 
     return {
-      elevation: elevations,
+      elevation: fullElevations,
       elevation_gain: stats.elevation_gain,
       elevation_loss: stats.elevation_loss,
       min_elevation: stats.min_elevation,
       max_elevation: stats.max_elevation,
       avg_elevation: stats.avg_elevation,
-      sampled_points: sampledPoints.length
+      sampled_points: sampledIndices.length
     };
   } catch (error) {
     console.error(`[Elevation] Error retrieving elevation data: ${error.message}`);
     console.error(`[Elevation] Stack: ${error.stack}`);
-    console.error(`[Elevation] Sampled points attempted: ${sampledPoints.length}`);
 
-    // Graceful degradation - return empty elevation data
+    // Graceful degradation
     console.warn('[Elevation] Returning zero elevations (service unavailable)');
     return {
       elevation: [],
