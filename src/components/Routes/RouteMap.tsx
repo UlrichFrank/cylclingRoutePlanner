@@ -58,10 +58,7 @@ export const RouteMap: React.FC = () => {
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const isDraggingRef = useRef(false);
 
-  // Debug context menu state
-  useEffect(() => {
-    console.log('[ContextMenu] State updated:', contextMenu);
-  }, [contextMenu]);
+
 
   const currentRoute = useRouteStore((state: any) => state.currentRoute);
   const pois = usePOIStore((state: any) => state.pois);
@@ -116,6 +113,7 @@ export const RouteMap: React.FC = () => {
             mapInstance.current.on('dragstart', () => {
               console.log('[Map] dragstart');
               isDraggingRef.current = true;
+              setContextMenu(null);
             });
 
             mapInstance.current.on('dragend', () => {
@@ -293,13 +291,22 @@ export const RouteMap: React.FC = () => {
       }
     };
 
+    // Handle Escape key to close context menu
+    const handleEscapeKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setContextMenu(null);
+      }
+    };
+
     document.addEventListener('click', handleClickOutside);
     window.addEventListener('navigateToWaypoint', handleNavigateToWaypoint);
+    document.addEventListener('keydown', handleEscapeKey);
     
     return () => {
       mapEl.removeEventListener('click', handleMapClick, true);
       document.removeEventListener('click', handleClickOutside);
       window.removeEventListener('navigateToWaypoint', handleNavigateToWaypoint);
+      document.removeEventListener('keydown', handleEscapeKey);
     };
   }, []);
 
@@ -315,23 +322,6 @@ export const RouteMap: React.FC = () => {
           left: 0,
         }}
       />
-
-      {/* Debug: Show context menu state */}
-      {contextMenu && (
-        <div style={{
-          position: 'fixed',
-          top: '10px',
-          right: '10px',
-          backgroundColor: '#22c55e',
-          color: 'white',
-          padding: '8px 12px',
-          borderRadius: '4px',
-          fontSize: '12px',
-          zIndex: 9999,
-        }}>
-          ContextMenu Active: ({Math.round(contextMenu.x)}, {Math.round(contextMenu.y)})
-        </div>
-      )}
 
       {/* Context Menu */}
       {contextMenu && (

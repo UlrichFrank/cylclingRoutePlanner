@@ -14,21 +14,8 @@ function AppContent() {
       {/* Header with Route Stats & Elevation */}
       <RouteHeader />
       
-      {/* Theme Toggle */}
-      <Box 
-        style={{ 
-          position: 'absolute',
-          top: 0,
-          right: 0,
-          zIndex: 51,
-          padding: '16px',
-        }}
-      >
-        <ThemeToggle />
-      </Box>
-
       {/* Main Content */}
-      <Box className="w-screen h-screen overflow-hidden" style={{ paddingTop: '100px' }}>
+      <Box className="w-screen h-screen overflow-hidden" style={  { position: 'relative' } }>
         {/* Fullscreen Map */}
         <RouteMap />
 

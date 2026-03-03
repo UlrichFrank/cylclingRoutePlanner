@@ -1,11 +1,14 @@
 /**
  * Route Calculator Component
  * Handles Valhalla route calculation with profile selection and loading states
+ * Also triggers POI search after route geometry is calculated
  */
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useRouteStore } from '../../store/routeStore';
+import { usePOIStore } from '../../store/poiStore';
 import { valhallaService } from '../../services/valhallaService';
+import { searchPOIsNearRoute } from '../../services/overpassService';
 import { useTheme } from '../Layout/ThemeContext';
 
 type ValhallaProfile = 'mountain' | 'road' | 'gravel';
@@ -111,6 +114,16 @@ export const RouteCalculator: React.FC<RouteCalculatorProps> = ({ onRouteCalcula
         },
         difficultyLevel: stats.difficulty,
       });
+
+      // Search for POIs near the calculated route
+      console.log('[RouteCalculator] Searching for POIs near route...');
+      try {
+        const pois = await searchPOIsNearRoute(geometry);
+        console.log('[RouteCalculator] Found', pois.length, 'POIs');
+        usePOIStore.setState({ pois });
+      } catch (poiError) {
+        console.warn('[RouteCalculator] POI search failed, continuing without POIs:', poiError);
+      }
 
       onRouteCalculated?.();
     } catch (err) {

@@ -7,6 +7,11 @@ export const WaypointInput: React.FC = () => {
     { lat: 52.5235, lng: 13.4115 },
   ]);
 
+  const [showPlaceholder, setShowPlaceholder] = useState<{ [key: number]: boolean }>({
+    0: true,
+    1: true,
+  });
+
   const { setRoute, currentRoute } = useRouteStore();
 
   const handleWaypointChange = (index: number, field: 'lat' | 'lng', value: string) => {
@@ -19,15 +24,24 @@ export const WaypointInput: React.FC = () => {
   };
 
   const handleAddWaypoint = () => {
+    const newIndex = waypoints.length;
     setWaypoints([
       ...waypoints,
       { lat: 52.52, lng: 13.4 },
     ]);
+    setShowPlaceholder({
+      ...showPlaceholder,
+      [newIndex]: true,
+    });
   };
 
   const handleRemoveWaypoint = (index: number) => {
     if (waypoints.length > 2) {
-      setWaypoints(waypoints.filter((_, i) => i !== index));
+      const newWaypoints = waypoints.filter((_, i) => i !== index);
+      setWaypoints(newWaypoints);
+      const newShowPlaceholder = { ...showPlaceholder };
+      delete newShowPlaceholder[index];
+      setShowPlaceholder(newShowPlaceholder);
     }
   };
 
@@ -50,10 +64,20 @@ export const WaypointInput: React.FC = () => {
           return { lat, lng };
         });
         setWaypoints(coords);
+        const newShowPlaceholder: { [key: number]: boolean } = {};
+        coords.forEach((_, i) => {
+          newShowPlaceholder[i] = true;
+        });
+        setShowPlaceholder(newShowPlaceholder);
       } catch (error) {
         alert('Ungültige Koordinaten. Bitte verwenden Sie das Format: 52.52,13.4;52.53,13.41;...');
       }
     }
+  };
+
+  const placeholders = {
+    lat: 'z.B. 52.5200',
+    lng: 'z.B. 13.4050',
   };
 
   return (
@@ -65,25 +89,51 @@ export const WaypointInput: React.FC = () => {
           <div key={idx} className="flex gap-2 items-end">
             <div className="flex-1">
               <label className="text-xs text-gray-600">Lat</label>
-              <input
-                type="number"
-                step="0.0001"
-                value={wp.lat}
-                onChange={(e) => handleWaypointChange(idx, 'lat', e.target.value)}
-                className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-                placeholder="Latitude"
-              />
+              <div className="relative">
+                <input
+                  type="number"
+                  step="0.0001"
+                  value={wp.lat}
+                  onChange={(e) => {
+                    handleWaypointChange(idx, 'lat', e.target.value);
+                    if (e.target.value === '') {
+                      setShowPlaceholder({ ...showPlaceholder, [idx]: true });
+                    }
+                  }}
+                  onFocus={() => setShowPlaceholder({ ...showPlaceholder, [idx]: false })}
+                  onBlur={() => {
+                    if (wp.lat === 0 || !wp.lat) {
+                      setShowPlaceholder({ ...showPlaceholder, [idx]: true });
+                    }
+                  }}
+                  className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                  placeholder={showPlaceholder[idx] ? placeholders.lat : ''}
+                />
+              </div>
             </div>
             <div className="flex-1">
               <label className="text-xs text-gray-600">Lng</label>
-              <input
-                type="number"
-                step="0.0001"
-                value={wp.lng}
-                onChange={(e) => handleWaypointChange(idx, 'lng', e.target.value)}
-                className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-                placeholder="Longitude"
-              />
+              <div className="relative">
+                <input
+                  type="number"
+                  step="0.0001"
+                  value={wp.lng}
+                  onChange={(e) => {
+                    handleWaypointChange(idx, 'lng', e.target.value);
+                    if (e.target.value === '') {
+                      setShowPlaceholder({ ...showPlaceholder, [idx]: true });
+                    }
+                  }}
+                  onFocus={() => setShowPlaceholder({ ...showPlaceholder, [idx]: false })}
+                  onBlur={() => {
+                    if (wp.lng === 0 || !wp.lng) {
+                      setShowPlaceholder({ ...showPlaceholder, [idx]: true });
+                    }
+                  }}
+                  className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                  placeholder={showPlaceholder[idx] ? placeholders.lng : ''}
+                />
+              </div>
             </div>
             {waypoints.length > 2 && (
               <button

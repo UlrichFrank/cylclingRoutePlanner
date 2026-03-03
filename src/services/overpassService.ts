@@ -70,6 +70,95 @@ const buildOverpassQuery = (bbox: BoundingBox, amenityType: string): string => {
   return `[bbox:${bbox.south},${bbox.west},${bbox.north},${bbox.east}];(node["amenity"="${amenityType}"];way["amenity"="${amenityType}"];relation["amenity"="${amenityType}"];);out center;`;
 };
 
+/**
+ * Calculate haversine distance between two points in km
+ */
+function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371; // Earth's radius in km
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+/**
+ * Filter POIs by distance from route
+ * Venues (restaurant/cafe/bakery): ≤ 500m
+ * Attractions: ≤ 3km
+ */
+function filterByDistance(pois: POI[], geometry: RouteCoordinate[]): POI[] {
+  return pois.filter((poi) => {
+    const venueMaxDist = 0.5; // km
+    const attractionMaxDist = 3; // km
+    const maxDist = poi.type === 'attraction' ? attractionMaxDist : venueMaxDist;
+
+    // Find minimum distance to any point on the route
+    const minDistance = Math.min(
+      ...geometry.map((coord) => haversineDistance(poi.lat, poi.lng, coord.lat, coord.lng))
+    );
+
+    return minDistance <= maxDist;
+  });
+}
+
+/**
+ * Build efficient Overpass query for all POI types at once
+ */
+function buildCombinedOverpassQuery(bbox: BoundingBox): string {
+  return `[bbox:${bbox.south},${bbox.west},${bbox.north},${bbox.east}];
+(
+  node["amenity"="restaurant"];
+  way["amenity"="restaurant"];
+  node["amenity"="cafe"];
+  way["amenity"="cafe"];
+  node["amenity"="bakery"];
+  way["amenity"="bakery"];
+  node["tourism"="attraction"];
+  way["tourism"="attraction"];
+);
+out center;`;
+}
+
+/**
+ * Parse Overpass response and map to POI types
+ */
+function parseOverpassResponse(data: any): POI[] {
+  const pois: POI[] = [];
+
+  if (!data.elements) return pois;
+
+  data.elements.forEach((element: any) => {
+    if (!element.tags || !element.tags.name) return;
+
+    const lat = element.center?.lat || element.lat;
+    const lng = element.center?.lon || element.lon;
+
+    if (!lat || !lng) return;
+
+    let type: POI['type'] = 'attraction';
+    if (element.tags.amenity === 'restaurant') type = 'restaurant';
+    else if (element.tags.amenity === 'cafe') type = 'cafe';
+    else if (element.tags.amenity === 'bakery') type = 'bakery';
+
+    pois.push({
+      id: `poi-${element.id}`,
+      name: element.tags.name,
+      lat,
+      lng,
+      type,
+      address: element.tags['addr:full'] || element.tags['addr:street'],
+    });
+  });
+
+  return pois;
+}
+
 // Mock data for Berlin restaurants, cafes, hotels, bakeries, and attractions
 const MOCK_DATA: Record<string, POI[]> = {
   restaurant: [
@@ -144,4 +233,54 @@ export const fetchPOIs = async (
     return MOCK_DATA[poiType] || [];
   }
 };
+
+/**
+ * Search POIs near a route with automatic distance filtering
+ * Single efficient Overpass query for all POI types
+ * Filters: 500m for venues, 3km for attractions
+ */
+export async function searchPOIsNearRoute(geometry: RouteCoordinate[]): Promise<POI[]> {
+  if (geometry.length < 2) {
+    console.warn('[POI] Route geometry too short for POI search');
+    return [];
+  }
+
+  try {
+    // Build bbox with buffer (5km for initial query to be safe)
+    const bufferDegrees = 5 / 111; // ~5km in degrees
+    const lats = geometry.map((c) => c.lat);
+    const lngs = geometry.map((c) => c.lng);
+
+    const bbox: BoundingBox = {
+      south: Math.min(...lats) - bufferDegrees,
+      west: Math.min(...lngs) - bufferDegrees,
+      north: Math.max(...lats) + bufferDegrees,
+      east: Math.max(...lngs) + bufferDegrees,
+    };
+
+    const query = buildCombinedOverpassQuery(bbox);
+
+    console.log('[POI] Querying Overpass API for all POI types...');
+
+    const response = await axios.post(OVERPASS_API, query, {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      timeout: 15000,
+    });
+
+    const allPois = parseOverpassResponse(response.data);
+    console.log(`[POI] Found ${allPois.length} POIs total`);
+
+    // Apply distance filters
+    const filteredPois = filterByDistance(allPois, geometry);
+    console.log(
+      `[POI] ${filteredPois.length} POIs within distance limits (500m venues, 3km attractions)`
+    );
+
+    return filteredPois;
+  } catch (error) {
+    console.error('[POI] Error querying Overpass API:', error);
+    // Return mock data as fallback
+    return [...MOCK_DATA.restaurant, ...MOCK_DATA.cafe, ...MOCK_DATA.bakery, ...MOCK_DATA.attraction];
+  }
+}
 
