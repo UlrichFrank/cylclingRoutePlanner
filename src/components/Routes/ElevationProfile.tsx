@@ -48,16 +48,18 @@ export const ElevationProfile: React.FC<ElevationProfileProps> = ({
     // Use stored elevation array if available
     const elevations = geometry.elevation || [];
     
-    // Calculate distance along route for each point
-    const data: ElevationPoint[] = geometry.geometry.map((coord, idx) => {
-      let distance = 0;
-      for (let i = 0; i < idx && i < geometry.geometry.length - 1; i++) {
-        const lat1 = geometry.geometry[i].lat;
-        const lng1 = geometry.geometry[i].lng;
-        const lat2 = geometry.geometry[i + 1].lat;
-        const lng2 = geometry.geometry[i + 1].lng;
+    // Calculate distance along route for each point (cumulative, O(n) instead of O(n²))
+    const data: ElevationPoint[] = [];
+    let cumulativeDistance = 0; // km
+    
+    for (let idx = 0; idx < geometry.geometry.length; idx++) {
+      if (idx > 0) {
+        const lat1 = geometry.geometry[idx - 1].lat;
+        const lng1 = geometry.geometry[idx - 1].lng;
+        const lat2 = geometry.geometry[idx].lat;
+        const lng2 = geometry.geometry[idx].lng;
         
-        const R = 6371;
+        const R = 6371; // Earth radius in km
         const dLat = ((lat2 - lat1) * Math.PI) / 180;
         const dLng = ((lng2 - lng1) * Math.PI) / 180;
         const a =
@@ -67,14 +69,21 @@ export const ElevationProfile: React.FC<ElevationProfileProps> = ({
             Math.sin(dLng / 2) *
             Math.sin(dLng / 2);
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        distance += R * c;
+        const segmentDistance = R * c;
+        cumulativeDistance += segmentDistance;
       }
       
-      return {
-        distance: Math.round(distance * 10) / 10, // km
+      data.push({
+        distance: Math.round(cumulativeDistance * 10) / 10, // km
         elevation: elevations[idx] || 0, // Use stored elevation or 0
-      };
-    });
+      });
+    }
+
+    if (data.length > 0) {
+      console.log(`[ElevationProfile] Calculated ${data.length} elevation points`);
+      console.log(`[ElevationProfile] Distance range: 0 - ${data[data.length - 1].distance} km`);
+      console.log(`[ElevationProfile] Expected total: ${geometry.distance?.toFixed(1) || 'N/A'} km`);
+    }
 
     return data;
   }, [geometry]);

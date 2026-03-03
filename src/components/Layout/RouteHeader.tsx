@@ -52,6 +52,7 @@ export function RouteHeader() {
         padding: '8px 16px',
       }}
     >
+      {/* Single Row: Stats on Left, Elevation Profile on Right */}
       <Flex justify="between" align="center" gap="4">
         {/* Title and Stats on Left */}
         <Flex direction="column" gap="1" style={{ flex: 1 }}>
@@ -92,9 +93,9 @@ export function RouteHeader() {
           )}
         </Flex>
 
-        {/* Mini Elevation Chart on Right - Narrower */}
+        {/* Mini Elevation Chart on Right - Next to Stats */}
         {geometry && (
-          <Box style={{ width: '180px', height: '50px', flexShrink: 0 }}>
+          <Box style={{ width: '250px', height: '60px', flexShrink: 0 }}>
             <ElevationProfile 
               compact={true}
             />
