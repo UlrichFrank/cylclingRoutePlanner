@@ -150,6 +150,8 @@ export async function getElevationProfile(polylineEncoded) {
     };
   } catch (error) {
     console.error(`[Elevation] Error retrieving elevation data: ${error.message}`);
+    console.error(`[Elevation] Stack: ${error.stack}`);
+    console.error(`[Elevation] Sampled points attempted: ${sampledPoints.length}`);
 
     // Graceful degradation - return empty elevation data
     console.warn('[Elevation] Returning zero elevations (service unavailable)');

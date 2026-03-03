@@ -98,6 +98,7 @@ export const RouteCalculator: React.FC<RouteCalculatorProps> = ({ onRouteCalcula
         profile,
         geometry: {
           geometry,
+          elevation: stats.elevationArray || [],
           distance: stats.distance,
           duration: stats.duration,
           elevationGain: stats.elevationGain,
@@ -149,6 +150,7 @@ export const RouteCalculator: React.FC<RouteCalculatorProps> = ({ onRouteCalcula
           profile,
           geometry: {
             geometry,
+            elevation: [], // No elevation data in fallback
             distance,
             duration: (distance / 20) * 3600, // Estimate 20 km/h
             elevationGain: 0,

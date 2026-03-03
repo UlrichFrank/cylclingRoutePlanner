@@ -106,7 +106,7 @@ function calculateDifficulty(stats: {
 }
 
 export interface ValhallaRouteResult {
-  geometry: [number, number][]; // [lng, lat] coordinates
+  geometry: [number, number][]; // [lat, lng] coordinates
   polyline: string; // Encoded polyline from Valhalla (for elevation API)
   distance: number; // km
   duration: number; // seconds
@@ -115,6 +115,10 @@ export interface ValhallaRouteResult {
     distance: number;
     duration: number;
   }>;
+}
+
+export interface RouteStatsWithElevation extends RouteStats {
+  elevationArray: number[]; // Full elevation array for charting
 }
 
 export interface ValhallaServiceConfig {
@@ -204,6 +208,7 @@ class ValhallaService {
   /**
    * Get elevation profile for a route
    * Pass the polyline from Valhalla response
+   * Returns both elevation array AND pre-calculated gain/loss from backend
    */
   async getElevationProfile(polylineShape: string): Promise<ElevationPoint[]> {
     if (!polylineShape || typeof polylineShape !== 'string') return [];
@@ -229,6 +234,8 @@ class ValhallaService {
         ok: response.ok,
         elevationCount: (data.elevation as number[])?.length,
         sampledPoints: data.sampled_points,
+        gain: data.elevation_gain,
+        loss: data.elevation_loss,
       });
 
       if (!response.ok) {
@@ -238,12 +245,24 @@ class ValhallaService {
 
       // Return elevation array (simple numbers) - will be used by route display
       const elevations = (data.elevation as number[]) || [];
-      return elevations.map((elevation) => ({
+      
+      // Store pre-calculated stats in a special property for route stats
+      const result = elevations.map((elevation) => ({
         distance: 0, // Not needed for new elevation approach
         elevation: elevation || 0,
         lat: 0,
         lon: 0,
-      }));
+      })) as any;
+      
+      // Attach backend-calculated stats to the array for getRouteStats() to use
+      result._stats = {
+        elevation_gain: data.elevation_gain || 0,
+        elevation_loss: data.elevation_loss || 0,
+        min_elevation: data.min_elevation || 0,
+        max_elevation: data.max_elevation || 0,
+      };
+      
+      return result;
     } catch (error) {
       console.error('[Elevation] Error:', error);
       return [];
@@ -267,17 +286,48 @@ class ValhallaService {
   }
 
   /**
-   * Calculate comprehensive route statistics
+   * Calculate comprehensive route statistics including elevation array
    */
   async getRouteStats(
     waypoints: LatLng[],
     profile: ValhallaProfile = 'road'
-  ): Promise<RouteStats> {
+  ): Promise<RouteStatsWithElevation> {
     const routeResult = await this.calculateRoute(waypoints, profile);
     // Pass the polyline (encoded) to elevation service
     const elevationProfile = await this.getElevationProfile(routeResult.polyline);
+    const elevationArray = elevationProfile.map(p => p.elevation);
 
-    const elevations = elevationProfile.map((p) => p.elevation).filter((e) => e > 0);
+    // Use backend-calculated stats if available
+    const backendStats = (elevationProfile as any)?._stats;
+    
+    if (backendStats && backendStats.elevation_gain !== undefined) {
+      // Backend already calculated these accurately
+      const stats: RouteStatsWithElevation = {
+        distance: routeResult.distance,
+        duration: routeResult.duration,
+        elevationGain: backendStats.elevation_gain,
+        elevationLoss: backendStats.elevation_loss,
+        maxElevation: backendStats.max_elevation,
+        minElevation: backendStats.min_elevation,
+        averageGrade: routeResult.distance > 0 ? 
+          (backendStats.elevation_gain / (routeResult.distance * 1000)) * 100 : 0,
+        difficulty: calculateDifficulty({
+          distance: routeResult.distance,
+          duration: routeResult.duration,
+          elevationGain: backendStats.elevation_gain,
+        }),
+        elevationArray,
+      };
+
+      if (DEBUG) {
+        console.log('[Valhalla] Route stats (from backend):', stats);
+      }
+
+      return stats;
+    }
+
+    // Fallback: calculate locally if backend stats not available
+    const elevations = elevationArray.filter((e) => e > 0);
     const minElevation = elevations.length > 0 ? Math.min(...elevations) : 0;
     const maxElevation = elevations.length > 0 ? Math.max(...elevations) : 0;
 
@@ -293,7 +343,7 @@ class ValhallaService {
     const avgGrade =
       routeResult.distance > 0 ? (elevationGain / (routeResult.distance * 1000)) * 100 : 0;
 
-    const stats: RouteStats = {
+    const stats: RouteStatsWithElevation = {
       distance: routeResult.distance,
       duration: routeResult.duration,
       elevationGain: Math.round(elevationGain),
@@ -306,10 +356,11 @@ class ValhallaService {
         duration: routeResult.duration,
         elevationGain,
       }),
+      elevationArray,
     };
 
     if (DEBUG) {
-      console.log('[Valhalla] Route stats:', stats);
+      console.log('[Valhalla] Route stats (calculated locally):', stats);
     }
 
     return stats;

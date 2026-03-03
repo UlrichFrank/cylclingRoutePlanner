@@ -45,6 +45,9 @@ export const ElevationProfile: React.FC<ElevationProfileProps> = ({
   const elevationData = useMemo(() => {
     if (!geometry?.geometry || geometry.geometry.length === 0) return [];
     
+    // Use stored elevation array if available
+    const elevations = geometry.elevation || [];
+    
     // Calculate distance along route for each point
     const data: ElevationPoint[] = geometry.geometry.map((coord, idx) => {
       let distance = 0;
@@ -69,7 +72,7 @@ export const ElevationProfile: React.FC<ElevationProfileProps> = ({
       
       return {
         distance: Math.round(distance * 10) / 10, // km
-        elevation: 0, // Placeholder - will be populated from elevation API if available
+        elevation: elevations[idx] || 0, // Use stored elevation or 0
       };
     });
 

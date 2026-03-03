@@ -14,6 +14,7 @@ export function decodePolyline(encoded) {
   let index = 0;
   let lat = 0;
   let lng = 0;
+  const PRECISION_FACTOR = 1e6; // Valhalla uses 1e6 precision, not Google Maps' 1e5
 
   while (index < encoded.length) {
     let result = 0;
@@ -44,8 +45,8 @@ export function decodePolyline(encoded) {
     lng += dlng;
 
     poly.push({
-      lat: lat / 1e5,
-      lon: lng / 1e5
+      lat: lat / PRECISION_FACTOR,
+      lon: lng / PRECISION_FACTOR
     });
   }
 

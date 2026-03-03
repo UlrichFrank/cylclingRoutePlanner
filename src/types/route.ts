@@ -19,6 +19,7 @@ export type ValhallaProfile = 'mountain' | 'road' | 'gravel';
 
 export interface RouteGeometry {
   geometry: RouteCoordinate[]; // Full route polyline from Valhalla
+  elevation: number[]; // Elevation values for each coordinate in geometry
   distance: number; // km
   duration: number; // seconds
   elevationGain: number; // meters
