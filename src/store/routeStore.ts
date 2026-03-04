@@ -32,12 +32,14 @@ export interface Route {
 interface RouteStore {
   currentRoute: Route | null;
   routes: Route[]; // Saved routes
+  elevationProfilePosition: number | null; // Index in geometry array when hovering over elevation profile
   setRoute: (route: Route) => void;
   getRoute: () => Route | null;
   saveRoute: (route: Route) => void; // Save to routes array
   loadRoute: (id: string) => void; // Load from routes array
   deleteRoute: (id: string) => void;
   loadRoutes: (routes: Route[]) => void; // Load from localStorage
+  setElevationProfilePosition: (index: number | null) => void; // Set position when hovering elevation profile
 }
 
 const EMPTY_ROUTE: Route = {
@@ -55,6 +57,7 @@ const EMPTY_ROUTE: Route = {
 export const useRouteStore = create<RouteStore>((set, get) => ({
   currentRoute: EMPTY_ROUTE,
   routes: [],
+  elevationProfilePosition: null,
   
   setRoute: (route: Route) => set({ currentRoute: route }),
   getRoute: () => get().currentRoute,
@@ -95,6 +98,8 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
   loadRoutes: (routes: Route[]) => {
     set({ routes });
   },
+  
+  setElevationProfilePosition: (index: number | null) => set({ elevationProfilePosition: index }),
 }));
 
 // Load routes from localStorage on startup

@@ -21,11 +21,14 @@ export const RouteCalculator: React.FC<RouteCalculatorProps> = ({ onRouteCalcula
   const { theme } = useTheme();
   const isDark = theme === 'dark';
   const { currentRoute, setRoute } = useRouteStore();
-  const [profile, setProfile] = useState<ValhallaProfile>('road');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const calcTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastWaypointsRef = useRef<string>('');
+  const lastProfileRef = useRef<string>('');
+
+  // Use profile from currentRoute, fallback to 'road'
+  const profile: ValhallaProfile = (currentRoute?.profile || 'road') as ValhallaProfile;
 
   // Color theme
   const colors = {
@@ -43,25 +46,7 @@ export const RouteCalculator: React.FC<RouteCalculatorProps> = ({ onRouteCalcula
     gravel: '🛣️ Gravel',
   };
 
-  // Auto-calculate route when waypoints change (with debounce)
-  useEffect(() => {
-    if (calcTimeoutRef.current) clearTimeout(calcTimeoutRef.current);
-
-    const waypointsStr = JSON.stringify(currentRoute?.waypoints);
-    if (waypointsStr === lastWaypointsRef.current) return;
-    lastWaypointsRef.current = waypointsStr;
-
-    if (currentRoute && currentRoute.waypoints.length >= 2 && currentRoute.geometry) {
-      // Auto-recalculate with same profile if waypoints changed
-      calcTimeoutRef.current = setTimeout(() => {
-        handleCalculateRoute();
-      }, 500);
-    }
-
-    return () => {
-      if (calcTimeoutRef.current) clearTimeout(calcTimeoutRef.current);
-    };
-  }, [currentRoute?.waypoints]);
+  // Route calculation is now manual-only (triggered by button click, not auto)
 
   const handleCalculateRoute = async () => {
     if (!currentRoute || currentRoute.waypoints.length < 2) {
@@ -73,52 +58,103 @@ export const RouteCalculator: React.FC<RouteCalculatorProps> = ({ onRouteCalcula
     setError(null);
 
     try {
-      // Convert waypoints to Valhalla format (lat/lon)
-      const locations = currentRoute.waypoints.map((wp) => ({
-        lat: wp.lat,
-        lon: wp.lng,
-      }));
-
-      // Calculate route using Valhalla
-      const routeResult = await valhallaService.calculateRoute(locations, profile);
-
-      // Get full stats including elevation
-      const stats = await valhallaService.getRouteStats(locations, profile);
-
-      // Convert geometry back to our RouteCoordinate format
-      // Valhalla polyline decoder now returns [lat, lng] format
-      const geometry = routeResult.geometry.map((coord) => ({
-        lat: coord[0],  // First element is now lat
-        lng: coord[1],  // Second element is now lng
-      }));
+      // Calculate route as segments: A→B, B→C, C→D, etc.
+      const segments = [];
+      const allGeometry: Array<{ lat: number; lng: number }> = [];
+      const allElevation: number[] = [];
       
-      console.log('[RouteCalculator] Converted geometry sample:', geometry.slice(0, 3));
-      console.log('[RouteCalculator] Full geometry length:', geometry.length);
+      let totalDistance = 0;
+      let totalDuration = 0;
+      let totalElevationGain = 0;
+      let totalElevationLoss = 0;
+      let maxElevation = -Infinity;
+      let minElevation = Infinity;
 
-      // Update route with calculated geometry
-      console.log('[RouteCalculator] Setting geometry with elevation array length:', stats.elevationArray?.length, 'vs geometry length:', geometry.length);
-      
+      // Process each segment
+      for (let i = 0; i < currentRoute.waypoints.length - 1; i++) {
+        const segmentLocations = [
+          {
+            lat: currentRoute.waypoints[i].lat,
+            lon: currentRoute.waypoints[i].lng,
+          },
+          {
+            lat: currentRoute.waypoints[i + 1].lat,
+            lon: currentRoute.waypoints[i + 1].lng,
+          },
+        ];
+
+        console.log(`[RouteCalculator] Calculating segment ${i + 1}/${currentRoute.waypoints.length - 1}: Waypoint ${String.fromCharCode(65 + i)} → ${String.fromCharCode(65 + i + 1)}`);
+
+        // Calculate this segment
+        const segmentResult = await valhallaService.calculateRoute(segmentLocations, profile);
+        const segmentStats = await valhallaService.getRouteStats(segmentLocations, profile);
+
+        // Convert geometry for this segment
+        const segmentGeometry = segmentResult.geometry.map((coord) => ({
+          lat: coord[0],
+          lng: coord[1],
+        }));
+
+        segments.push({
+          from: String.fromCharCode(65 + i),
+          to: String.fromCharCode(65 + i + 1),
+          geometry: segmentGeometry,
+          distance: segmentStats.distance,
+          duration: segmentStats.duration,
+          elevationGain: segmentStats.elevationGain,
+          elevationLoss: segmentStats.elevationLoss,
+        });
+
+        // Add geometry, avoiding duplicate waypoint connections
+        if (i === 0) {
+          allGeometry.push(...segmentGeometry);
+          allElevation.push(...(segmentStats.elevationArray || []));
+        } else {
+          // Skip first point to avoid duplicates at waypoint connections
+          allGeometry.push(...segmentGeometry.slice(1));
+          allElevation.push(...(segmentStats.elevationArray || []).slice(1));
+        }
+
+        // Aggregate stats
+        totalDistance += segmentStats.distance;
+        totalDuration += segmentStats.duration;
+        totalElevationGain += segmentStats.elevationGain;
+        totalElevationLoss += segmentStats.elevationLoss;
+        maxElevation = Math.max(maxElevation, segmentStats.maxElevation);
+        minElevation = Math.min(minElevation, segmentStats.minElevation);
+      }
+
+      // Calculate average grade for entire route
+      const averageGrade = allGeometry.length > 0 
+        ? ((totalElevationGain - totalElevationLoss) / (totalDistance * 1000)) * 100 
+        : 0;
+
+      console.log('[RouteCalculator] Route segments:', segments.length);
+      console.log('[RouteCalculator] Total distance:', totalDistance.toFixed(2), 'meters');
+      console.log('[RouteCalculator] Total elevation gain:', totalElevationGain.toFixed(2), 'meters');
+
+      // Update route with aggregated data
       setRoute({
         ...currentRoute,
         profile,
         geometry: {
-          geometry,
-          elevation: stats.elevationArray || [],
-          distance: stats.distance,
-          duration: stats.duration,
-          elevationGain: stats.elevationGain,
-          elevationLoss: stats.elevationLoss,
-          maxElevation: stats.maxElevation,
-          minElevation: stats.minElevation,
-          averageGrade: stats.averageGrade,
+          geometry: allGeometry,
+          elevation: allElevation,
+          distance: totalDistance,
+          duration: totalDuration,
+          elevationGain: totalElevationGain,
+          elevationLoss: totalElevationLoss,
+          maxElevation: maxElevation === -Infinity ? 0 : maxElevation,
+          minElevation: minElevation === Infinity ? 0 : minElevation,
+          averageGrade,
         },
-        difficultyLevel: stats.difficulty,
+        difficultyLevel: totalElevationGain > 1000 ? 'hard' : totalElevationGain > 500 ? 'medium' : 'easy',
       });
 
       // Search for POIs near the calculated route
       console.log('[RouteCalculator] Searching for POIs near route...');
       try {
-        const pois = await searchPOIsNearRoute(geometry);
+        const pois = await searchPOIsNearRoute(allGeometry);
         console.log('[RouteCalculator] Found', pois.length, 'POIs');
         usePOIStore.setState({ pois });
       } catch (poiError) {
@@ -193,34 +229,6 @@ export const RouteCalculator: React.FC<RouteCalculatorProps> = ({ onRouteCalcula
         backgroundColor: colors.bg,
       }}
     >
-      {/* Profile Selector - Combobox */}
-      <div style={{ marginBottom: '12px' }}>
-        <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '8px', color: colors.text }}>
-          Fahrradtyp
-        </label>
-        <select
-          value={profile}
-          onChange={(e) => setProfile(e.target.value as ValhallaProfile)}
-          style={{
-            width: '100%',
-            padding: '8px 12px',
-            borderRadius: '6px',
-            border: `1px solid ${colors.border}`,
-            backgroundColor: colors.mutedBg,
-            color: colors.text,
-            fontSize: '14px',
-            fontWeight: '500',
-            cursor: 'pointer',
-          }}
-        >
-          {Object.entries(profileLabels).map(([key, label]) => (
-            <option key={key} value={key}>
-              {label}
-            </option>
-          ))}
-        </select>
-      </div>
-
       {/* Calculate Button */}
       <button
         onClick={handleCalculateRoute}

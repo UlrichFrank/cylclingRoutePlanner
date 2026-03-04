@@ -6,7 +6,6 @@ import { usePOIStore } from '../../store/poiStore';
 import { useTheme } from '../Layout/ThemeContext';
 import { POI_COLORS } from '../../types/poi';
 import { fetchPOIs } from '../../services/overpassService';
-import { LocationSuggestions, LocationSuggestion } from './LocationSuggestions';
 import { RouteCalculator } from './RouteCalculator';
 
 interface Waypoint {
@@ -71,8 +70,7 @@ export const LeftPanel: React.FC = () => {
   };
 
   const [waypoints, setWaypoints] = useState<Waypoint[]>([
-    { label: 'A', placeholder: 'Gib einen Startpunkt ein', lat: 0, lng: 0, isLocked: false },
-    { label: 'B', placeholder: 'Wo solls hingehen?', lat: 0, lng: 0, isLocked: false },
+    { label: 'A', placeholder: '', lat: 0, lng: 0, isLocked: false },
   ]);
 
   const [activeFilters, setActiveFilters] = useState<POIFilterState>({
@@ -94,8 +92,7 @@ export const LeftPanel: React.FC = () => {
   const [autocompleteSuggestions, setAutocompleteSuggestions] = useState<any[]>([]);
   const [autocompleteLoading, setAutocompleteLoading] = useState(false);
   const [activeWaypointIndex, setActiveWaypointIndex] = useState<number | null>(null);
-  const [showLocationSuggestions, setShowLocationSuggestions] = useState<number | null>(null);
-  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [fetchFailed, setFetchFailed] = useState(false);
@@ -112,23 +109,6 @@ export const LeftPanel: React.FC = () => {
     { key: 'hotel', icon: '🏨', label: 'Hotels' },
     { key: 'attraction', icon: '⭐', label: 'Sehenswürdigkeiten' },
   ];
-
-  // Get user geolocation
-  useEffect(() => {
-    if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setUserLocation({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-          });
-        },
-        () => {
-          console.log('[LeftPanel] Geolocation denied or unavailable');
-        }
-      );
-    }
-  }, []);
 
   // Auto-update route coordinates when waypoints change
   useEffect(() => {
@@ -155,91 +135,107 @@ export const LeftPanel: React.FC = () => {
     }
   }, [waypoints]);
 
-  // Fetch POIs asynchronously when waypoints change (with debouncing)
-  useEffect(() => {
-    // Clear existing timeout to debounce rapid waypoint changes
-    if (fetchTimeoutRef.current) {
-      clearTimeout(fetchTimeoutRef.current);
-    }
+  // Helper: Auto-relabel waypoints A-Z
+  const relabelWaypoints = (wps: Waypoint[]): Waypoint[] => {
+    const labels = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+    return wps.map((wp, idx) => ({
+      ...wp,
+      label: labels[idx] || `${idx + 1}`,
+    }));
+  };
 
-    const currentCoordinatesStr = JSON.stringify(currentRoute?.waypoints);
+  // Helper: Remove waypoint at index
+  const removeWaypoint = (index: number) => {
+    if (waypoints.length <= 2) return; // Keep at least 2 waypoints
+    const newWaypoints = relabelWaypoints(
+      waypoints.filter((_, i) => i !== index)
+    );
+    setWaypoints(newWaypoints);
+  };
+
+  // Helper: Insert new waypoint at index
+  const insertWaypoint = (index: number) => {
+    const newWaypoints = [...waypoints];
+    newWaypoints.splice(index, 0, {
+      label: 'X', // Will be relabeled
+      placeholder: '',
+      lat: 0,
+      lng: 0,
+      isLocked: false,
+    });
+    setWaypoints(relabelWaypoints(newWaypoints));
+  };
+
+  // Helper: Reorder waypoint (move from fromIndex to toIndex)
+  const moveWaypoint = (fromIndex: number, toIndex: number) => {
+    const newWaypoints = [...waypoints];
+    const [removed] = newWaypoints.splice(fromIndex, 1);
+    newWaypoints.splice(toIndex, 0, removed);
+    setWaypoints(relabelWaypoints(newWaypoints));
+  };
+
+  // Fetch POIs asynchronously - NOW MANUAL ONLY (called explicitly, not auto-triggered)
+  const fetchPOIsManually = async () => {
+    if (!currentRoute || !currentRoute.waypoints || currentRoute.waypoints.length === 0) return;
+
+    setLoading(true);
+    setFetchFailed(false);
     
-    // Skip fetch if coordinates haven't changed or fetch already failed
-    if (currentCoordinatesStr === lastFetchedCoordinatesRef.current || fetchFailed) {
-      return;
-    }
+    try {
+      const newFetchedPOIs: Record<POIType, any[]> = {
+        restaurant: [],
+        cafe: [],
+        bakery: [],
+        hotel: [],
+        attraction: [],
+      };
 
-    const fetchAllPOIs = async () => {
-      if (!currentRoute || !currentRoute.waypoints || currentRoute.waypoints.length === 0) return;
+      let hasFetchErrors = false;
 
-      setLoading(true);
-      setFetchFailed(false);
-      
-      try {
-        const newFetchedPOIs: Record<POIType, any[]> = {
-          restaurant: [],
-          cafe: [],
-          bakery: [],
-          hotel: [],
-          attraction: [],
-        };
-
-        let hasFetchErrors = false;
-
-        // Fetch for all types sequentially with small delays to avoid rate limiting
-        for (let i = 0; i < poiFilters.length; i++) {
-          const filter = poiFilters[i];
-          try {
-            const results = await fetchPOIs(currentRoute.waypoints, filter.key as any);
-            const filtered = results.filter((poi: any) => {
-              const distance = calculateDistanceToRoute(poi.lat, poi.lng, currentRoute.waypoints);
-              return distance <= 1.0;
-            });
-            newFetchedPOIs[filter.key] = filtered;
-            
-            // Small delay between requests to avoid rate limiting
-            if (i < poiFilters.length - 1) {
-              await new Promise(resolve => setTimeout(resolve, 300));
-            }
-          } catch (error) {
-            console.error(`Error fetching ${filter.key}:`, error);
-            hasFetchErrors = true;
-            newFetchedPOIs[filter.key] = [];
+      // Fetch for all types sequentially with small delays to avoid rate limiting
+      for (let i = 0; i < poiFilters.length; i++) {
+        const filter = poiFilters[i];
+        try {
+          const results = await fetchPOIs(currentRoute.waypoints, filter.key as any);
+          const filtered = results.filter((poi: any) => {
+            const distance = calculateDistanceToRoute(poi.lat, poi.lng, currentRoute.waypoints);
+            return distance <= 1.0;
+          });
+          newFetchedPOIs[filter.key] = filtered;
+          
+          // Small delay between requests to avoid rate limiting
+          if (i < poiFilters.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 300));
           }
+        } catch (error) {
+          console.error(`Error fetching ${filter.key}:`, error);
+          hasFetchErrors = true;
+          newFetchedPOIs[filter.key] = [];
         }
+      }
 
-        if (!hasFetchErrors) {
-          setFetchedPOIs(newFetchedPOIs);
-          lastFetchedCoordinatesRef.current = currentCoordinatesStr;
+      if (!hasFetchErrors) {
+        setFetchedPOIs(newFetchedPOIs);
+        lastFetchedCoordinatesRef.current = JSON.stringify(currentRoute.waypoints);
 
-          // Update display with currently active filters
-          const activePOITypes: POIType[] = Object.entries(activeFilters)
-            .filter(([_, active]) => active)
-            .map(([type]) => type as POIType);
+        // Update display with currently active filters
+        const activePOITypes: POIType[] = Object.entries(activeFilters)
+          .filter(([_, active]) => active)
+          .map(([type]) => type as POIType);
 
-          const allActivePOIs = activePOITypes.flatMap(type => newFetchedPOIs[type] || []);
-          setPOIs(allActivePOIs);
-        } else {
-          setFetchFailed(true);
-          console.warn('Fetch failed - will retry only on new waypoint changes');
-        }
-      } catch (error) {
-        console.error('Unexpected error during POI fetch:', error);
+        const allActivePOIs = activePOITypes.flatMap(type => newFetchedPOIs[type] || []);
+        setPOIs(allActivePOIs);
+      } else {
         setFetchFailed(true);
-      } finally {
-        setLoading(false);
+        console.warn('POI fetch failed');
       }
-    };
-
-    // Debounce: wait 500ms after waypoint change before fetching
-    fetchTimeoutRef.current = setTimeout(fetchAllPOIs, 500);
-
-    return () => {
-      if (fetchTimeoutRef.current) {
-        clearTimeout(fetchTimeoutRef.current);
-      }
-    };
-  }, [currentRoute?.waypoints?.length]);
+    } catch (error) {
+      console.error('Unexpected error during POI fetch:', error);
+      setFetchFailed(true);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Listen for waypoint set from context menu
   useEffect(() => {
@@ -296,9 +292,11 @@ export const LeftPanel: React.FC = () => {
           `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(value)}&format=json&limit=8&addressdetails=1`
         );
         const data = await response.json();
-        // Filter for results with address details and better filtering
+        console.log('[Autocomplete] Search for:', value, 'Results:', data.length);
+        
+        // Filter for results with display_name (more lenient than requiring address object)
         const filtered = data
-          .filter((item: any) => item.address && item.display_name)
+          .filter((item: any) => item.display_name)
           .map((item: any) => ({
             ...item,
             // Prioritize results with street/house number
@@ -306,6 +304,8 @@ export const LeftPanel: React.FC = () => {
           }))
           .sort((a: any, b: any) => a.priority - b.priority)
           .slice(0, 5);
+        
+        console.log('[Autocomplete] Filtered results:', filtered.length);
         setAutocompleteSuggestions(filtered);
       } catch (error) {
         console.error('Autocomplete error:', error);
@@ -379,41 +379,19 @@ export const LeftPanel: React.FC = () => {
     setWaypoints(newWaypoints);
   };
 
-  const handleSelectLocation = (index: number, suggestion: LocationSuggestion) => {
-    const newWaypoints = [...waypoints];
-    newWaypoints[index].lat = suggestion.lat;
-    newWaypoints[index].lng = suggestion.lng;
-    newWaypoints[index].isLocked = true;
-    newWaypoints[index].placeholder = suggestion.label;
-    setWaypoints(newWaypoints);
-    setShowLocationSuggestions(null);
-    setAutocompleteSuggestions([]);
-
-    // Dispatch event to navigate map to this location
-    window.dispatchEvent(
-      new CustomEvent('navigateToWaypoint', {
-        detail: {
-          lat: suggestion.lat,
-          lng: suggestion.lng,
-          label: newWaypoints[index].label,
-        },
-      })
-    );
-  };
+  // Note: handleSelectLocation functionality moved to handleSelectSuggestion
 
   const handleAddWaypoint = () => {
-    if (waypoints.length < waypointLabels.length) {
-      setWaypoints([
+    if (waypoints.length < 26) {
+      setWaypoints(relabelWaypoints([
         ...waypoints,
-        { label: waypointLabels[waypoints.length], placeholder: '', lat: 52.52, lng: 13.4, isLocked: false },
-      ]);
+        { label: 'X', placeholder: '', lat: 52.52, lng: 13.4, isLocked: false },
+      ]));
     }
   };
 
   const handleRemoveWaypoint = (index: number) => {
-    if (waypoints.length > 2) {
-      setWaypoints(waypoints.filter((_, i) => i !== index));
-    }
+    removeWaypoint(index);
   };
 
   // Toggle filter - only change display, no fetching
@@ -428,6 +406,29 @@ export const LeftPanel: React.FC = () => {
 
     const allActivePOIs = activePOITypes.flatMap(type => fetchedPOIs[type] || []);
     setPOIs(allActivePOIs);
+  };
+
+  // Drag-and-Drop handlers for waypoint reordering
+  const handleDragStart = (e: React.DragEvent<HTMLDivElement>, index: number) => {
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>, toIndex: number) => {
+    e.preventDefault();
+    if (draggedIndex !== null && draggedIndex !== toIndex) {
+      moveWaypoint(draggedIndex, toIndex);
+    }
+    setDraggedIndex(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
   };
 
   return (
@@ -458,7 +459,95 @@ export const LeftPanel: React.FC = () => {
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
-          <div style={{ fontSize: '18px', fontWeight: 'bold' }}>Deine Route</div>
+          {/* Route Title with Profile Selector */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              padding: '0 16px',
+              borderRadius: '20px',
+              height: '52px',
+              border: `1px solid ${colors.inputBorder}`,
+              backgroundColor: colors.inputBg,
+              flex: 1,
+              boxSizing: 'border-box',
+            }}
+          >
+            <span style={{ fontSize: '16px', fontWeight: '600', color: colors.text }}>Deine</span>
+            {/* Profile Selector Dropdown */}
+            <DropdownMenu.Root>
+              <DropdownMenu.Trigger asChild>
+                <button
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    padding: '4px',
+                    cursor: 'pointer',
+                    color: colors.text,
+                    fontSize: '24px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '32px',
+                    height: '32px',
+                    minWidth: '32px',
+                  }}
+                  title="Fahrradtyp wechseln"
+                >
+                  {currentRoute?.profile === 'mountain' ? '🏔️' : currentRoute?.profile === 'gravel' ? '🛣️' : '🚴'}
+                </button>
+              </DropdownMenu.Trigger>
+              <DropdownMenu.Content
+                style={{
+                  minWidth: '80px',
+                  backgroundColor: colors.bg,
+                  border: `1px solid ${colors.border}`,
+                  borderRadius: '8px',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                  padding: '4px',
+                  color: colors.text,
+                  zIndex: 1010,
+                }}
+              >
+                <DropdownMenu.Item
+                  onClick={() => {
+                    if (currentRoute) {
+                      setRoute({ ...currentRoute, profile: 'road' });
+                    }
+                  }}
+                  style={{ padding: '8px 12px', fontSize: '16px', cursor: 'pointer', textAlign: 'center' }}
+                >
+                  🚴
+                </DropdownMenu.Item>
+                <DropdownMenu.Item
+                  onClick={() => {
+                    if (currentRoute) {
+                      setRoute({ ...currentRoute, profile: 'mountain' });
+                    }
+                  }}
+                  style={{ padding: '8px 12px', fontSize: '16px', cursor: 'pointer', textAlign: 'center' }}
+                >
+                  🏔️
+                </DropdownMenu.Item>
+                <DropdownMenu.Item
+                  onClick={() => {
+                    if (currentRoute) {
+                      setRoute({ ...currentRoute, profile: 'gravel' });
+                    }
+                  }}
+                  style={{ padding: '8px 12px', fontSize: '16px', cursor: 'pointer', textAlign: 'center' }}
+                >
+                  🛣️
+                </DropdownMenu.Item>
+              </DropdownMenu.Content>
+            </DropdownMenu.Root>
+
+            {/* Route Title Text */}
+            <span style={{ fontSize: '16px', fontWeight: '600', color: colors.text }}>Route</span>
+          </div>
+
+          {/* Settings Menu */}
           <DropdownMenu.Root>
             <DropdownMenu.Trigger asChild>
               <button style={{ background: 'none', border: 'none', padding: '8px', cursor: 'pointer', color: colors.text }}>
@@ -499,125 +588,134 @@ export const LeftPanel: React.FC = () => {
           {/* Waypoint Inputs */}
           <div style={{ marginBottom: '16px' }}>
             {waypoints.map((wp, idx) => (
-              <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                <div style={{ position: 'relative', flex: 1 }}>
-                  <input
-                    type="text"
-                    placeholder={wp.isLocked ? `${wp.lat.toFixed(4)}, ${wp.lng.toFixed(4)}` : 'Adresse oder Koordinaten (lat,lng) eingeben...'}
-                    value={wp.placeholder}
-                    onChange={(e) => handleWaypointChange(idx, e.target.value)}
-                    onKeyPress={(e) => handleWaypointKeyPress(idx, e)}
-                    onFocus={() => !wp.isLocked && setShowLocationSuggestions(idx)}
-                    disabled={wp.isLocked}
-                    style={{
-                      width: '100%',
-                      borderRadius: '20px',
-                      height: '52px',
-                      paddingLeft: '50px',
-                      paddingRight: '12px',
-                      border: `1px solid ${colors.inputBorder}`,
-                      backgroundColor: wp.isLocked ? colors.mutedBg : colors.inputBg,
-                      color: colors.text,
-                      fontSize: '14px',
-                      boxSizing: 'border-box',
-                      opacity: wp.isLocked ? 0.6 : 1,
-                      cursor: wp.isLocked ? 'not-allowed' : 'text',
-                    }}
-                  />
-                  
-                  {/* Location Suggestions Dropdown */}
-                  <LocationSuggestions
-                    isOpen={showLocationSuggestions === idx && !wp.isLocked}
-                    onSelectLocation={(suggestion) => handleSelectLocation(idx, suggestion)}
-                    onClose={() => setShowLocationSuggestions(null)}
-                    currentLat={userLocation?.lat}
-                    currentLng={userLocation?.lng}
-                  />
-                  
-                  {/* Autocomplete Dropdown */}
-                  {activeWaypointIndex === idx && autocompleteSuggestions.length > 0 && (
+              <div 
+                key={idx} 
+                draggable
+                onDragStart={(e) => handleDragStart(e, idx)}
+                onDragOver={handleDragOver}
+                onDrop={(e) => handleDrop(e, idx)}
+                onDragEnd={handleDragEnd}
+                style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '8px', 
+                  marginBottom: '8px',
+                  opacity: draggedIndex === idx ? 0.5 : 1,
+                  backgroundColor: draggedIndex === null ? 'transparent' : (draggedIndex === idx ? colors.mutedBg : 'transparent'),
+                  borderRadius: '20px',
+                  padding: draggedIndex === null ? '0' : '4px',
+                  transition: 'all 0.2s',
+                  cursor: draggedIndex === idx ? 'grabbing' : 'grab',
+                }}
+              >
+                  <div style={{ position: 'relative', flex: 1 }}>
+                    <input
+                      type="text"
+                      placeholder={wp.isLocked ? `${wp.lat.toFixed(4)}, ${wp.lng.toFixed(4)}` : 'Adresse oder Koordinaten (lat,lng) eingeben...'}
+                      value={wp.placeholder}
+                      onChange={(e) => handleWaypointChange(idx, e.target.value)}
+                      onKeyPress={(e) => handleWaypointKeyPress(idx, e)}
+                      disabled={wp.isLocked}
+                      style={{
+                        width: '100%',
+                        borderRadius: '20px',
+                        height: '52px',
+                        paddingLeft: '50px',
+                        paddingRight: '40px',
+                        border: `1px solid ${colors.inputBorder}`,
+                        backgroundColor: wp.isLocked ? colors.mutedBg : colors.inputBg,
+                        color: colors.text,
+                        fontSize: '14px',
+                        boxSizing: 'border-box',
+                        opacity: wp.isLocked ? 0.6 : 1,
+                        cursor: wp.isLocked ? 'not-allowed' : 'text',
+                      }}
+                    />
+                    
+                    {/* Autocomplete Dropdown */}
+                    {activeWaypointIndex === idx && autocompleteSuggestions.length > 0 && (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: '100%',
+                          left: 0,
+                          right: 0,
+                          backgroundColor: colors.inputBg,
+                          border: `1px solid ${colors.inputBorder}`,
+                          borderTop: 'none',
+                          borderRadius: '0 0 12px 12px',
+                          maxHeight: '200px',
+                          overflowY: 'auto',
+                          zIndex: 10,
+                        }}
+                      >
+                        {autocompleteSuggestions.map((suggestion, sugIdx) => (
+                          <div
+                            key={sugIdx}
+                            onClick={() => handleSelectSuggestion(idx, suggestion)}
+                            style={{
+                              padding: '8px 12px',
+                              cursor: 'pointer',
+                              borderBottom: `1px solid ${colors.border}`,
+                              fontSize: '13px',
+                              color: colors.text,
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.backgroundColor = colors.mutedBg;
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.backgroundColor = 'transparent';
+                            }}
+                          >
+                            {suggestion.address?.house_number 
+                              ? `${suggestion.address.road || ''} ${suggestion.address.house_number}, ${suggestion.address.postcode || ''} ${suggestion.address.city || suggestion.address.town || ''}`
+                              : suggestion.address?.road 
+                              ? `${suggestion.address.road}, ${suggestion.address.postcode || ''} ${suggestion.address.city || suggestion.address.town || ''}`
+                              : suggestion.display_name?.split(',')[0] || suggestion.name
+                            }
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
                     <div
                       style={{
                         position: 'absolute',
-                        top: '100%',
-                        left: 0,
-                        right: 0,
-                        backgroundColor: colors.inputBg,
-                        border: `1px solid ${colors.inputBorder}`,
-                        borderTop: 'none',
-                        borderRadius: '0 0 12px 12px',
-                        maxHeight: '200px',
-                        overflowY: 'auto',
-                        zIndex: 10,
+                        left: '8px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        width: '32px',
+                        height: '32px',
+                        borderRadius: '50%',
+                        backgroundColor: waypointColors[wp.label],
+                        color: 'white',
+                        fontSize: '12px',
+                        fontWeight: 'bold',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: wp.isLocked ? 'pointer' : 'default',
+                      }}
+                      onClick={() => wp.isLocked && handleUnlockWaypoint(idx)}
+                      title={wp.isLocked ? 'Klicken zum bearbeiten' : ''}
+                    >
+                      {wp.label}
+                    </div>
+                  </div>
+                  {waypoints.length > 2 && (
+                    <button
+                      onClick={() => handleRemoveWaypoint(idx)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#dc2626',
+                        cursor: 'pointer',
+                        padding: '8px',
                       }}
                     >
-                      {autocompleteSuggestions.map((suggestion, sugIdx) => (
-                        <div
-                          key={sugIdx}
-                          onClick={() => handleSelectSuggestion(idx, suggestion)}
-                          style={{
-                            padding: '8px 12px',
-                            cursor: 'pointer',
-                            borderBottom: `1px solid ${colors.border}`,
-                            fontSize: '13px',
-                            color: colors.text,
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.backgroundColor = colors.mutedBg;
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.backgroundColor = 'transparent';
-                          }}
-                        >
-                          {suggestion.address?.house_number 
-                            ? `${suggestion.address.road || ''} ${suggestion.address.house_number}, ${suggestion.address.postcode || ''} ${suggestion.address.city || suggestion.address.town || ''}`
-                            : suggestion.address?.road 
-                            ? `${suggestion.address.road}, ${suggestion.address.postcode || ''} ${suggestion.address.city || suggestion.address.town || ''}`
-                            : suggestion.display_name?.split(',')[0] || suggestion.name
-                          }
-                        </div>
-                      ))}
-                    </div>
+                      <Cross2Icon width={20} height={20} />
+                    </button>
                   )}
-
-                  <div
-                    style={{
-                      position: 'absolute',
-                      left: '8px',
-                      top: '50%',
-                      transform: 'translateY(-50%)',
-                      width: '32px',
-                      height: '32px',
-                      borderRadius: '50%',
-                      backgroundColor: waypointColors[wp.label],
-                      color: 'white',
-                      fontSize: '12px',
-                      fontWeight: 'bold',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: wp.isLocked ? 'pointer' : 'default',
-                    }}
-                    onClick={() => wp.isLocked && handleUnlockWaypoint(idx)}
-                    title={wp.isLocked ? 'Klicken zum bearbeiten' : ''}
-                  >
-                    {wp.label}
-                  </div>
-                </div>
-                {waypoints.length > 2 && (
-                  <button
-                    onClick={() => handleRemoveWaypoint(idx)}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: '#dc2626',
-                      cursor: 'pointer',
-                      padding: '8px',
-                    }}
-                  >
-                    <Cross2Icon width={20} height={20} />
-                  </button>
-                )}
               </div>
             ))}
           </div>

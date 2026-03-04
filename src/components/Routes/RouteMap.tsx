@@ -47,6 +47,7 @@ interface ContextMenuPosition {
   lng: number;
   x: number;
   y: number;
+  nearbyWaypointIndex?: number; // Index of nearby waypoint if exists
 }
 
 export const RouteMap: React.FC = () => {
@@ -54,13 +55,17 @@ export const RouteMap: React.FC = () => {
   const mapInstance = useRef<L.Map | null>(null);
   const routeLayerGroup = useRef<L.LayerGroup | null>(null);
   const poiLayerGroup = useRef<L.LayerGroup | null>(null);
+  const elevationPositionMarkerRef = useRef<L.Marker | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuPosition | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const isDraggingRef = useRef(false);
-
-
+  const contextMenuTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingContextMenuRef = useRef<ContextMenuPosition | null>(null);
+  const clickPositionRef = useRef<{ x: number; y: number } | null>(null);
+  const allowNewContextMenuRef = useRef(true);
 
   const currentRoute = useRouteStore((state: any) => state.currentRoute);
+  const elevationProfilePosition = useRouteStore((state: any) => state.elevationProfilePosition);
   const pois = usePOIStore((state: any) => state.pois);
 
   useEffect(() => {
@@ -114,6 +119,12 @@ export const RouteMap: React.FC = () => {
               console.log('[Map] dragstart');
               isDraggingRef.current = true;
               setContextMenu(null);
+              // Cancel pending context menu
+              if (contextMenuTimeoutRef.current) {
+                clearTimeout(contextMenuTimeoutRef.current);
+                contextMenuTimeoutRef.current = null;
+              }
+              pendingContextMenuRef.current = null;
             });
 
             mapInstance.current.on('dragend', () => {
@@ -127,15 +138,50 @@ export const RouteMap: React.FC = () => {
                 button: e.originalEvent.button,
                 latlng: e.latlng,
               });
-              // Show context menu on left-click if not dragging
+              // Handle context menu with 0.5s delay
               if (!isDraggingRef.current && e.originalEvent.button === 0) {
-                console.log('[Map] Setting context menu');
-                setContextMenu({
-                  lat: e.latlng.lat,
-                  lng: e.latlng.lng,
-                  x: e.originalEvent.clientX,
-                  y: e.originalEvent.clientY,
-                });
+                // If a context menu is already open, just close it (don't open new)
+                if (contextMenu) {
+                  console.log('[Map] Context menu already open, closing without opening new');
+                  setContextMenu(null);
+                  allowNewContextMenuRef.current = false;
+                  // Clear any pending timeout
+                  if (contextMenuTimeoutRef.current) {
+                    clearTimeout(contextMenuTimeoutRef.current);
+                    contextMenuTimeoutRef.current = null;
+                  }
+                  pendingContextMenuRef.current = null;
+                  clickPositionRef.current = null;
+                } else {
+                  // Store click position and allow new menu
+                  clickPositionRef.current = {
+                    x: e.originalEvent.clientX,
+                    y: e.originalEvent.clientY,
+                  };
+                  allowNewContextMenuRef.current = true;
+                  
+                  console.log('[Map] Click registered, waiting for stillness...');
+                  
+                  pendingContextMenuRef.current = {
+                    lat: e.latlng.lat,
+                    lng: e.latlng.lng,
+                    x: e.originalEvent.clientX,
+                    y: e.originalEvent.clientY,
+                  };
+                  
+                  contextMenuTimeoutRef.current = setTimeout(() => {
+                    // Check if mouse is still in same position
+                    if (pendingContextMenuRef.current && allowNewContextMenuRef.current) {
+                      console.log('[Map] Showing delayed context menu after 0.5s');
+                       const nearbyIndex = findNearbyWaypoint(pendingContextMenuRef.current.lat, pendingContextMenuRef.current.lng);
+                       setContextMenu({
+                         ...pendingContextMenuRef.current,
+                         nearbyWaypointIndex: nearbyIndex,
+                       });
+                      contextMenuTimeoutRef.current = null;
+                    }
+                  }, 500);
+                }
               }
             });
             
@@ -237,6 +283,55 @@ export const RouteMap: React.FC = () => {
     }
   }, [currentRoute, pois]);
 
+  // Handle elevation profile position marker
+  useEffect(() => {
+    if (!mapInstance.current || !currentRoute?.geometry?.geometry) return;
+
+    // Remove old marker if exists
+    if (elevationPositionMarkerRef.current) {
+      mapInstance.current.removeLayer(elevationPositionMarkerRef.current);
+      elevationPositionMarkerRef.current = null;
+    }
+
+    // Add new marker at elevation position
+    if (elevationProfilePosition !== null && elevationProfilePosition < currentRoute.geometry.geometry.length) {
+      const coord = currentRoute.geometry.geometry[elevationProfilePosition];
+      
+      // Create a custom circle icon
+      const circleIcon = L.icon({
+        iconUrl: `data:image/svg+xml;base64,${btoa(`
+          <svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="10" cy="10" r="8" fill="#ff6b6b" opacity="0.9" stroke="white" stroke-width="2"/>
+          </svg>
+        `)}`,
+        iconSize: [20, 20],
+        iconAnchor: [10, 10],
+        popupAnchor: [0, -10],
+      });
+      
+      const positionMarker = L.marker([coord.lat, coord.lng], { icon: circleIcon });
+      positionMarker.bindPopup(`Position: ${(elevationProfilePosition / (currentRoute.geometry.geometry.length - 1) * 100).toFixed(1)}%`);
+      positionMarker.addTo(mapInstance.current);
+      elevationPositionMarkerRef.current = positionMarker;
+    }
+  }, [elevationProfilePosition, currentRoute]);
+
+  // Helper: Find nearby waypoint (within ~50 meters)
+  const findNearbyWaypoint = (lat: number, lng: number): number | undefined => {
+    if (!currentRoute?.waypoints) return undefined;
+    
+    const PROXIMITY_THRESHOLD = 0.0005; // ~50 meters at equator
+    
+    for (let i = 0; i < currentRoute.waypoints.length; i++) {
+      const wp = currentRoute.waypoints[i];
+      const distance = Math.abs(wp.lat - lat) + Math.abs(wp.lng - lng);
+      if (distance < PROXIMITY_THRESHOLD) {
+        return i;
+      }
+    }
+    return undefined;
+  };
+
   // Separate useEffect for event listeners on map container
   useEffect(() => {
     const mapEl = mapContainer.current;
@@ -258,13 +353,47 @@ export const RouteMap: React.FC = () => {
           const point = L.point(x, y);
           const latlng = mapInstance.current.unproject(point, mapInstance.current.getZoom());
           
-          console.log('[MapClick] Setting context menu at:', latlng);
-          setContextMenu({
-            lat: latlng.lat,
-            lng: latlng.lng,
-            x: e.clientX,
-            y: e.clientY,
-          });
+          // If a context menu is already open, just close it (don't open new)
+          if (contextMenu) {
+            console.log('[MapClick] Context menu already open, closing without opening new');
+            setContextMenu(null);
+            allowNewContextMenuRef.current = false;
+            if (contextMenuTimeoutRef.current) {
+              clearTimeout(contextMenuTimeoutRef.current);
+              contextMenuTimeoutRef.current = null;
+            }
+            pendingContextMenuRef.current = null;
+            clickPositionRef.current = null;
+          } else {
+            // Store click position and allow new menu
+            clickPositionRef.current = {
+              x: e.clientX,
+              y: e.clientY,
+            };
+            allowNewContextMenuRef.current = true;
+            
+            console.log('[MapClick] Click registered, waiting for stillness...');
+            
+            pendingContextMenuRef.current = {
+              lat: latlng.lat,
+              lng: latlng.lng,
+              x: e.clientX,
+              y: e.clientY,
+            };
+            
+            contextMenuTimeoutRef.current = setTimeout(() => {
+              // Check if mouse is still in same position
+              if (pendingContextMenuRef.current && allowNewContextMenuRef.current) {
+                console.log('[MapClick] Showing delayed context menu after 0.5s');
+                const nearbyIndex = findNearbyWaypoint(pendingContextMenuRef.current.lat, pendingContextMenuRef.current.lng);
+                setContextMenu({
+                  ...pendingContextMenuRef.current,
+                  nearbyWaypointIndex: nearbyIndex,
+                });
+                contextMenuTimeoutRef.current = null;
+              }
+            }, 500);
+          }
         }
       }
     };
@@ -273,12 +402,42 @@ export const RouteMap: React.FC = () => {
     mapEl.addEventListener('click', handleMapClick, true);
     console.log('[Events] Click listener registered on map container');
 
+    // Handle mouse move to cancel pending context menu if mouse moved
+    const handleMouseMove = (e: MouseEvent) => {
+      if (clickPositionRef.current) {
+        const dx = Math.abs(e.clientX - clickPositionRef.current.x);
+        const dy = Math.abs(e.clientY - clickPositionRef.current.y);
+        const threshold = 5; // pixels
+        
+        // If mouse moved more than threshold, cancel pending menu
+        if (dx > threshold || dy > threshold) {
+          console.log('[Map] Mouse moved, canceling pending context menu');
+          allowNewContextMenuRef.current = false;
+          if (contextMenuTimeoutRef.current) {
+            clearTimeout(contextMenuTimeoutRef.current);
+            contextMenuTimeoutRef.current = null;
+          }
+          pendingContextMenuRef.current = null;
+          clickPositionRef.current = null;
+        }
+      }
+    };
+
+    mapEl.addEventListener('mousemove', handleMouseMove);
+    console.log('[Events] Mouse move listener registered on map container');
+
     // Handle clicks outside context menu
     const handleClickOutside = (e: MouseEvent) => {
       // Don't close menu if clicking on the map itself or the menu
       if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node) && 
           !(e.target as Node).contains?.(mapEl) && !mapEl.contains(e.target as Node)) {
         setContextMenu(null);
+        // Cancel pending context menu
+        if (contextMenuTimeoutRef.current) {
+          clearTimeout(contextMenuTimeoutRef.current);
+          contextMenuTimeoutRef.current = null;
+        }
+        pendingContextMenuRef.current = null;
       }
     };
 
@@ -295,6 +454,12 @@ export const RouteMap: React.FC = () => {
     const handleEscapeKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setContextMenu(null);
+        // Cancel pending context menu
+        if (contextMenuTimeoutRef.current) {
+          clearTimeout(contextMenuTimeoutRef.current);
+          contextMenuTimeoutRef.current = null;
+        }
+        pendingContextMenuRef.current = null;
       }
     };
 
@@ -304,11 +469,16 @@ export const RouteMap: React.FC = () => {
     
     return () => {
       mapEl.removeEventListener('click', handleMapClick, true);
+      mapEl.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('click', handleClickOutside);
       window.removeEventListener('navigateToWaypoint', handleNavigateToWaypoint);
       document.removeEventListener('keydown', handleEscapeKey);
+      // Clean up any pending timeout
+      if (contextMenuTimeoutRef.current) {
+        clearTimeout(contextMenuTimeoutRef.current);
+      }
     };
-  }, []);
+  }, [contextMenu]);
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
@@ -343,50 +513,13 @@ export const RouteMap: React.FC = () => {
           }}
           onClick={(e) => e.stopPropagation()}
         >
-          {/* Waypoint modification options */}
-          {currentRoute && currentRoute.waypoints.length > 0 && (
-            <>
-              {currentRoute.waypoints.map((wp: any, index: number) => (
-                <button
-                  key={index}
-                  onClick={() => {
-                    const newWaypoints = [...currentRoute.waypoints];
-                    newWaypoints[index] = { lat: contextMenu.lat, lng: contextMenu.lng };
-                    useRouteStore.setState({
-                      currentRoute: { ...currentRoute, waypoints: newWaypoints }
-                    });
-                    setContextMenu(null);
-                  }}
-                  style={{
-                    display: 'block',
-                    width: '100%',
-                    padding: '10px 12px',
-                    border: 'none',
-                    background: 'none',
-                    textAlign: 'left',
-                    cursor: 'pointer',
-                    fontSize: '13px',
-                    color: '#0f172a',
-                    borderBottom: index < currentRoute.waypoints.length - 1 ? '1px solid #e0e7ff' : 'none',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = '#e0f2fe';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = 'transparent';
-                  }}
-                >
-                  {index === 0 ? '📍 Start setzen' : index === currentRoute.waypoints.length - 1 ? '🏁 Ziel setzen' : `📍 Punkt ${index + 1} setzen`}
-                </button>
-              ))}
-            </>
-          )}
-
-          {/* Add waypoint at end */}
-          {currentRoute && currentRoute.waypoints.length > 0 && (
+          {contextMenu?.nearbyWaypointIndex !== undefined ? (
+            // Delete waypoint if clicked on one
             <button
               onClick={() => {
-                const newWaypoints = [...currentRoute.waypoints, { lat: contextMenu.lat, lng: contextMenu.lng }];
+                const newWaypoints = currentRoute.waypoints.filter(
+                  (_: any, i: number) => i !== contextMenu.nearbyWaypointIndex
+                );
                 useRouteStore.setState({
                   currentRoute: { ...currentRoute, waypoints: newWaypoints }
                 });
@@ -401,8 +534,38 @@ export const RouteMap: React.FC = () => {
                 textAlign: 'left',
                 cursor: 'pointer',
                 fontSize: '13px',
-                color: '#0f172a',
-                borderTop: '1px solid #e0e7ff',
+                color: '#dc2626',
+                fontWeight: '600',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#fee2e2';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'transparent';
+              }}
+            >
+              🗑️ Wegpunkt löschen
+            </button>
+          ) : (
+            // Add waypoint if not on one
+            <button
+              onClick={() => {
+                const newWaypoints = [...(currentRoute?.waypoints || []), { lat: contextMenu.lat, lng: contextMenu.lng }];
+                useRouteStore.setState({
+                  currentRoute: { ...currentRoute, waypoints: newWaypoints }
+                });
+                setContextMenu(null);
+              }}
+              style={{
+                display: 'block',
+                width: '100%',
+                padding: '10px 12px',
+                border: 'none',
+                background: 'none',
+                textAlign: 'left',
+                cursor: 'pointer',
+                fontSize: '13px',
+                color: '#16a34a',
                 fontWeight: '600',
               }}
               onMouseEnter={(e) => {
@@ -413,71 +576,6 @@ export const RouteMap: React.FC = () => {
               }}
             >
               ➕ Wegpunkt hinzufügen
-            </button>
-          )}
-
-          {/* Add first waypoint (start) */}
-          {currentRoute && currentRoute.waypoints.length === 0 && (
-            <button
-              onClick={() => {
-                const newWaypoints = [{ lat: contextMenu.lat, lng: contextMenu.lng }];
-                useRouteStore.setState({
-                  currentRoute: { ...currentRoute, waypoints: newWaypoints }
-                });
-                setContextMenu(null);
-              }}
-              style={{
-                display: 'block',
-                width: '100%',
-                padding: '10px 12px',
-                border: 'none',
-                background: 'none',
-                textAlign: 'left',
-                cursor: 'pointer',
-                fontSize: '13px',
-                color: '#0f172a',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = '#dcfce7';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'transparent';
-              }}
-            >
-              📍 1. Startpunkt setzen
-            </button>
-          )}
-
-          {/* Add second waypoint (end) if only start exists */}
-          {currentRoute && currentRoute.waypoints.length === 1 && (
-            <button
-              onClick={() => {
-                const newWaypoints = [...currentRoute.waypoints, { lat: contextMenu.lat, lng: contextMenu.lng }];
-                useRouteStore.setState({
-                  currentRoute: { ...currentRoute, waypoints: newWaypoints }
-                });
-                setContextMenu(null);
-              }}
-              style={{
-                display: 'block',
-                width: '100%',
-                padding: '10px 12px',
-                border: 'none',
-                background: 'none',
-                textAlign: 'left',
-                cursor: 'pointer',
-                fontSize: '13px',
-                color: '#0f172a',
-                borderTop: '1px solid #e0e7ff',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = '#dcfce7';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'transparent';
-              }}
-            >
-              🏁 2. Endpunkt setzen
             </button>
           )}
         </div>
