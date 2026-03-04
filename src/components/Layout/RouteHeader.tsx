@@ -93,7 +93,7 @@ export function RouteHeader() {
 
           {/* Elevation Profile */}
           {geometry && (
-            <Box style={{ width: '220px', height: '60px', flexShrink: 0 }}>
+            <Box style={{ width: '400px', height: '80px', flexShrink: 0 }}>
               <ElevationProfile compact={true} />
             </Box>
           )}

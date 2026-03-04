@@ -1,12 +1,39 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { DotsHorizontalIcon, PlusIcon, Cross2Icon } from '@radix-ui/react-icons';
+import { DotsHorizontalIcon, PlusIcon, Cross2Icon, GearIcon } from '@radix-ui/react-icons';
 import { useRouteStore, RouteCoordinate } from '../../store/routeStore';
 import { usePOIStore } from '../../store/poiStore';
 import { useTheme } from '../Layout/ThemeContext';
 import { POI_COLORS } from '../../types/poi';
 import { fetchPOIs } from '../../services/overpassService';
 import { RouteCalculator } from './RouteCalculator';
+
+// Octicon SVG components for bike profiles
+const RoadBikeIcon: React.FC<{ size?: number; color?: string }> = ({ size = 24, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="7" cy="18" r="3" />
+    <circle cx="17" cy="18" r="3" />
+    <path d="M12 6c-1 0-2 1-2 2v2h-2l2 6h8l2-6h-2V8c0-1-1-2-2-2m0 0h-4m7 10l-1.5-4.5m-5 4.5l1.5-4.5" />
+  </svg>
+);
+
+const MountainBikeIcon: React.FC<{ size?: number; color?: string }> = ({ size = 24, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="7" cy="18" r="3" />
+    <circle cx="17" cy="18" r="3" />
+    <path d="M12 6c-1 0-2 1-2 2v2h-2l1 3 1-1 2 5h6l1.5-4.5M7 8l2.5 6m3-6l1.5 6" />
+    <path d="M12 6l-1 2m1-2l1 2" />
+  </svg>
+);
+
+const GravelBikeIcon: React.FC<{ size?: number; color?: string }> = ({ size = 24, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="7" cy="18" r="3" />
+    <circle cx="17" cy="18" r="3" />
+    <path d="M12 6c-1 0-2 1-2 2v2h-2l1.5 4.5h6.5l1.5-4.5M7 8l2.5 6m3-6l1.5 6" />
+    <path d="M12 10v4M10 12h4" />
+  </svg>
+);
 
 interface Waypoint {
   label: string;
@@ -474,7 +501,6 @@ export const LeftPanel: React.FC = () => {
               boxSizing: 'border-box',
             }}
           >
-            <span style={{ fontSize: '16px', fontWeight: '600', color: colors.text }}>Deine</span>
             {/* Profile Selector Dropdown */}
             <DropdownMenu.Root>
               <DropdownMenu.Trigger asChild>
@@ -485,7 +511,6 @@ export const LeftPanel: React.FC = () => {
                     padding: '4px',
                     cursor: 'pointer',
                     color: colors.text,
-                    fontSize: '24px',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -495,7 +520,13 @@ export const LeftPanel: React.FC = () => {
                   }}
                   title="Fahrradtyp wechseln"
                 >
-                  {currentRoute?.profile === 'mountain' ? '🏔️' : currentRoute?.profile === 'gravel' ? '🛣️' : '🚴'}
+                  {currentRoute?.profile === 'mountain' ? (
+                    <MountainBikeIcon size={24} color={colors.text} />
+                  ) : currentRoute?.profile === 'gravel' ? (
+                    <GravelBikeIcon size={24} color={colors.text} />
+                  ) : (
+                    <RoadBikeIcon size={24} color={colors.text} />
+                  )}
                 </button>
               </DropdownMenu.Trigger>
               <DropdownMenu.Content
@@ -516,9 +547,9 @@ export const LeftPanel: React.FC = () => {
                       setRoute({ ...currentRoute, profile: 'road' });
                     }
                   }}
-                  style={{ padding: '8px 12px', fontSize: '16px', cursor: 'pointer', textAlign: 'center' }}
+                  style={{ padding: '8px 12px', fontSize: '16px', cursor: 'pointer', textAlign: 'center', display: 'flex', justifyContent: 'center' }}
                 >
-                  🚴
+                  <RoadBikeIcon size={20} color={colors.text} />
                 </DropdownMenu.Item>
                 <DropdownMenu.Item
                   onClick={() => {
@@ -526,9 +557,9 @@ export const LeftPanel: React.FC = () => {
                       setRoute({ ...currentRoute, profile: 'mountain' });
                     }
                   }}
-                  style={{ padding: '8px 12px', fontSize: '16px', cursor: 'pointer', textAlign: 'center' }}
+                  style={{ padding: '8px 12px', fontSize: '16px', cursor: 'pointer', textAlign: 'center', display: 'flex', justifyContent: 'center' }}
                 >
-                  🏔️
+                  <MountainBikeIcon size={20} color={colors.text} />
                 </DropdownMenu.Item>
                 <DropdownMenu.Item
                   onClick={() => {
@@ -536,9 +567,9 @@ export const LeftPanel: React.FC = () => {
                       setRoute({ ...currentRoute, profile: 'gravel' });
                     }
                   }}
-                  style={{ padding: '8px 12px', fontSize: '16px', cursor: 'pointer', textAlign: 'center' }}
+                  style={{ padding: '8px 12px', fontSize: '16px', cursor: 'pointer', textAlign: 'center', display: 'flex', justifyContent: 'center' }}
                 >
-                  🛣️
+                  <GravelBikeIcon size={20} color={colors.text} />
                 </DropdownMenu.Item>
               </DropdownMenu.Content>
             </DropdownMenu.Root>
