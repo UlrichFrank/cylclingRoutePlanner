@@ -111,18 +111,25 @@ function filterByDistance(pois: POI[], geometry: RouteCoordinate[]): POI[] {
  * Build efficient Overpass query for all POI types at once
  */
 function buildCombinedOverpassQuery(bbox: BoundingBox): string {
-  return `[bbox:${bbox.south},${bbox.west},${bbox.north},${bbox.east}];
+  const query = `[bbox:${bbox.south},${bbox.west},${bbox.north},${bbox.east}];
 (
   node["amenity"="restaurant"];
   way["amenity"="restaurant"];
-  node["amenity"="cafe"];
-  way["amenity"="cafe"];
+  node["shop"="bakery"];
+  way["shop"="bakery"];
   node["amenity"="bakery"];
   way["amenity"="bakery"];
+  node["amenity"="cafe"];
+  way["amenity"="cafe"];
+  node["shop"="cafe"];
+  way["shop"="cafe"];
   node["tourism"="attraction"];
   way["tourism"="attraction"];
 );
 out center;`;
+  console.log('[POI] Overpass Query:', query);
+  console.log('[POI] BBox:', bbox);
+  return query;
 }
 
 /**
@@ -142,9 +149,18 @@ function parseOverpassResponse(data: any): POI[] {
     if (!lat || !lng) return;
 
     let type: POI['type'] = 'attraction';
-    if (element.tags.amenity === 'restaurant') type = 'restaurant';
-    else if (element.tags.amenity === 'cafe') type = 'cafe';
-    else if (element.tags.amenity === 'bakery') type = 'bakery';
+    
+    // Check amenity tags first, then shop tags
+    if (element.tags.amenity === 'restaurant' || element.tags.shop === 'restaurant') {
+      type = 'restaurant';
+    } else if (element.tags.amenity === 'cafe' || element.tags.shop === 'cafe') {
+      type = 'cafe';
+    } else if (element.tags.amenity === 'bakery' || element.tags.shop === 'bakery') {
+      type = 'bakery';
+    } else if (element.tags.shop === 'supermarket' || element.tags.shop === 'convenience') {
+      // Optional: include supermarkets as attraction
+      type = 'attraction';
+    }
 
     pois.push({
       id: `poi-${element.id}`,
@@ -245,19 +261,19 @@ export async function searchPOIsNearRoute(geometry: RouteCoordinate[]): Promise<
     return [];
   }
 
+  // Build bbox with buffer (5km for initial query to be safe) - needs to be outside try for error handler
+  const bufferDegrees = 5 / 111; // ~5km in degrees
+  const lats = geometry.map((c) => c.lat);
+  const lngs = geometry.map((c) => c.lng);
+
+  const bbox: BoundingBox = {
+    south: Math.min(...lats) - bufferDegrees,
+    west: Math.min(...lngs) - bufferDegrees,
+    north: Math.max(...lats) + bufferDegrees,
+    east: Math.max(...lngs) + bufferDegrees,
+  };
+
   try {
-    // Build bbox with buffer (5km for initial query to be safe)
-    const bufferDegrees = 5 / 111; // ~5km in degrees
-    const lats = geometry.map((c) => c.lat);
-    const lngs = geometry.map((c) => c.lng);
-
-    const bbox: BoundingBox = {
-      south: Math.min(...lats) - bufferDegrees,
-      west: Math.min(...lngs) - bufferDegrees,
-      north: Math.max(...lats) + bufferDegrees,
-      east: Math.max(...lngs) + bufferDegrees,
-    };
-
     const query = buildCombinedOverpassQuery(bbox);
 
     console.log('[POI] Querying Overpass API for all POI types...');
@@ -267,8 +283,19 @@ export async function searchPOIsNearRoute(geometry: RouteCoordinate[]): Promise<
       timeout: 15000,
     });
 
+    console.log('[POI] Overpass response status:', response.status);
+    console.log('[POI] Overpass response elements count:', response.data.elements?.length || 0);
+    if (response.data.elements?.length > 0) {
+      console.log('[POI] First element sample:', response.data.elements[0]);
+    }
+
     const allPois = parseOverpassResponse(response.data);
     console.log(`[POI] Found ${allPois.length} POIs total`);
+
+    // Cache the results in localStorage
+    const cacheKey = `poi_cache_${bbox.south}_${bbox.west}_${bbox.north}_${bbox.east}`;
+    localStorage.setItem(cacheKey, JSON.stringify(allPois));
+    console.log('[POI] Cached results in localStorage');
 
     // Apply distance filters
     const filteredPois = filterByDistance(allPois, geometry);
@@ -276,11 +303,38 @@ export async function searchPOIsNearRoute(geometry: RouteCoordinate[]): Promise<
       `[POI] ${filteredPois.length} POIs within distance limits (500m venues, 3km attractions)`
     );
 
+    // Fallback to mock data if Overpass returns 0 results (likely area has no data)
+    if (filteredPois.length === 0) {
+      console.log('[POI] No real POIs found - falling back to mock data for demo');
+      const mockData = [...MOCK_DATA.restaurant, ...MOCK_DATA.cafe, ...MOCK_DATA.bakery, ...MOCK_DATA.attraction];
+      console.log('[POI] Mock data count:', mockData.length);
+      return mockData;
+    }
+
     return filteredPois;
-  } catch (error) {
-    console.error('[POI] Error querying Overpass API:', error);
-    // Return mock data as fallback
-    return [...MOCK_DATA.restaurant, ...MOCK_DATA.cafe, ...MOCK_DATA.bakery, ...MOCK_DATA.attraction];
+  } catch (error: any) {
+    console.error('[POI] Error querying Overpass API:', error?.message || error);
+    
+    // Try to use cached data first
+    const cacheKey = `poi_cache_${bbox.south}_${bbox.west}_${bbox.north}_${bbox.east}`;
+    const cachedData = localStorage.getItem(cacheKey);
+    if (cachedData) {
+      console.log('[POI] Using cached POI data');
+      try {
+        const pois = JSON.parse(cachedData);
+        const filteredPois = filterByDistance(pois, geometry);
+        if (filteredPois.length > 0) {
+          return filteredPois;
+        }
+      } catch (e) {
+        console.warn('[POI] Failed to parse cached data');
+      }
+    }
+    
+    console.log('[POI] No cache found, falling back to mock data...');
+    const mockData = [...MOCK_DATA.restaurant, ...MOCK_DATA.cafe, ...MOCK_DATA.bakery, ...MOCK_DATA.attraction];
+    console.log('[POI] Mock data count:', mockData.length, 'items');
+    return mockData;
   }
 }
 

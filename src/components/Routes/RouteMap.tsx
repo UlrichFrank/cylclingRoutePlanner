@@ -272,14 +272,17 @@ export const RouteMap: React.FC = () => {
     // Update POI markers
     if (mapInstance.current) {
       poiLayerGroup.current?.clearLayers();
+      console.log('[RouteMap] Rendering POIs. Count:', pois.length);
 
       pois.forEach((poi: any) => {
+        console.log('[RouteMap] Adding POI marker:', poi.name, poi.type, poi.lat, poi.lng);
         // Get icon based on POI type, fallback to default
         const icon = poiMarkerIcons[poi.type] || defaultMarkerIcon;
         const marker = L.marker([poi.lat, poi.lng], { icon });
         marker.bindPopup(`<b>${poi.name}</b><br/>${poi.type}`);
         poiLayerGroup.current?.addLayer(marker);
       });
+      console.log('[RouteMap] POIs rendered. Total:', pois.length);
     }
   }, [currentRoute, pois]);
 

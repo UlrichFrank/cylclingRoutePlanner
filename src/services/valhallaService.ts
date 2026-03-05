@@ -250,6 +250,7 @@ class ValhallaService {
       console.log('[Elevation] Sample elevations:', elevations.slice(0, 5), '...', elevations.slice(-5));
       
       // Store pre-calculated stats in a special property for route stats
+      console.log('[Elevation] Starting to map elevations...');
       const result = elevations.map((elevation) => ({
         distance: 0, // Not needed for new elevation approach
         elevation: elevation !== undefined ? elevation : 0,
@@ -258,6 +259,7 @@ class ValhallaService {
       })) as any;
       
       console.log('[Elevation] Mapped result length:', result.length);
+      console.log('[Elevation] About to attach stats...');
       
       // Attach backend-calculated stats to the array for getRouteStats() to use
       result._stats = {

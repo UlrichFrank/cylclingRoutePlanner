@@ -167,14 +167,22 @@ export const RouteCalculator: React.FC<RouteCalculatorProps> = ({ onRouteCalcula
         difficultyLevel: totalElevationGain > 1000 ? 'hard' : totalElevationGain > 500 ? 'medium' : 'easy',
       });
 
+      console.log('[RouteCalculator] Route set in store. Geometry:', {
+        geometryLength: allGeometry.length,
+        firstPoint: allGeometry[0],
+        lastPoint: allGeometry[allGeometry.length - 1],
+      });
+
       // Search for POIs near the calculated route
-      console.log('[RouteCalculator] Searching for POIs near route...');
+      console.log('[RouteCalculator] Attempting POI search with geometry length:', allGeometry.length);
       try {
         const pois = await searchPOIsNearRoute(allGeometry);
-        console.log('[RouteCalculator] Found', pois.length, 'POIs');
+        console.log('[RouteCalculator] Found', pois.length, 'POIs:', pois.slice(0, 3));
         usePOIStore.setState({ pois });
+        console.log('[RouteCalculator] POIs set in store');
       } catch (poiError) {
-        console.warn('[RouteCalculator] POI search failed, continuing without POIs:', poiError);
+        console.error('[RouteCalculator] POI search failed:', poiError);
+        console.warn('[RouteCalculator] Continuing without POIs');
       }
 
       onRouteCalculated?.();

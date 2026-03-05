@@ -135,6 +135,32 @@ export const LeftPanel: React.FC = () => {
     }
   }, [waypoints]);
 
+  // Sync routeStore waypoints (from map context menu) to local state
+  useEffect(() => {
+    if (!currentRoute?.waypoints || currentRoute.waypoints.length === 0) return;
+
+    const storeWaypoints = currentRoute.waypoints;
+    const newLocalWaypoints: Waypoint[] = storeWaypoints.map((wp: any, idx: number) => ({
+      label: waypointLabels[idx] || `${idx + 1}`,
+      placeholder: '',
+      lat: wp.lat,
+      lng: wp.lng,
+      isLocked: false,
+    }));
+
+    // Only update if coordinates actually changed to avoid infinite loops
+    const hasChanged = 
+      waypoints.length !== newLocalWaypoints.length ||
+      waypoints.some((wp, idx) => 
+        wp.lat !== newLocalWaypoints[idx].lat || wp.lng !== newLocalWaypoints[idx].lng
+      );
+
+    if (hasChanged) {
+      console.log('[LeftPanel] Syncing routeStore waypoints to local state:', newLocalWaypoints);
+      setWaypoints(newLocalWaypoints);
+    }
+  }, [currentRoute?.waypoints]);
+
   // Helper: Auto-relabel waypoints A-Z
   const relabelWaypoints = (wps: Waypoint[]): Waypoint[] => {
     const labels = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
