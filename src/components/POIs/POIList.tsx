@@ -1,5 +1,6 @@
 import React from 'react';
 import { usePOIStore } from '../../store/poiStore';
+import { UtensilsCrossed, Coffee, Hotel, Croissant } from 'lucide-react';
 
 export const POIList: React.FC = () => {
   const pois = usePOIStore((state) => state.pois);
@@ -17,11 +18,11 @@ export const POIList: React.FC = () => {
     );
   }
 
-  const typeIcons: Record<string, string> = {
-    restaurant: '🍽️',
-    cafe: '☕',
-    hotel: '🏨',
-    bakery: '🥐',
+  const typeIcons: Record<string, React.ReactNode> = {
+    restaurant: <UtensilsCrossed size={18} />,
+    cafe: <Coffee size={18} />,
+    hotel: <Hotel size={18} />,
+    bakery: <Croissant size={18} />,
   };
 
   return (
@@ -38,7 +39,7 @@ export const POIList: React.FC = () => {
           >
             <div className="flex items-start justify-between">
               <div className="flex-1">
-                <h3 className="font-semibold text-gray-900">
+                <h3 className="font-semibold text-gray-900 flex items-center gap-2">
                   {typeIcons[poi.type]} {poi.name}
                 </h3>
                 {poi.address && (

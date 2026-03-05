@@ -10,6 +10,7 @@ import { usePOIStore } from '../../store/poiStore';
 import { valhallaService } from '../../services/valhallaService';
 import { searchPOIsNearRoute } from '../../services/overpassService';
 import { useTheme } from '../Layout/ThemeContext';
+import { MapPin, Loader } from 'lucide-react';
 
 type ValhallaProfile = 'mountain' | 'road' | 'gravel';
 
@@ -26,6 +27,21 @@ export const RouteCalculator: React.FC<RouteCalculatorProps> = ({ onRouteCalcula
   const calcTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastWaypointsRef = useRef<string>('');
   const lastProfileRef = useRef<string>('');
+
+  // Add spin animation style
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+    `;
+    document.head.appendChild(style);
+    return () => {
+      document.head.removeChild(style);
+    };
+  }, []);
 
   // Use profile from currentRoute, fallback to 'road'
   const profile: ValhallaProfile = (currentRoute?.profile || 'road') as ValhallaProfile;
@@ -245,9 +261,23 @@ export const RouteCalculator: React.FC<RouteCalculatorProps> = ({ onRouteCalcula
           cursor: hasValidWaypoints && !isLoading ? 'pointer' : 'not-allowed',
           opacity: hasValidWaypoints && !isLoading ? 1 : 0.5,
           transition: 'all 0.2s',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '8px',
         }}
       >
-        {isLoading ? '🔄 Berechne Route...' : '📍 Route berechnen'}
+        {isLoading ? (
+          <>
+            <Loader size={16} style={{ animation: 'spin 1s linear infinite' }} />
+            Berechne Route...
+          </>
+        ) : (
+          <>
+            <MapPin size={16} />
+            Route berechnen
+          </>
+        )}
       </button>
 
       {/* Error Message */}

@@ -376,7 +376,7 @@ class ValhallaService {
       case 'mountain':
         return {
           bicycle: {
-            use_roads: 0.3,  // Prefer trails
+            use_roads: 0.05,  // Prefer trails
             avoid_bad_surfaces: false,  // OK with rough terrain
           },
         };
@@ -390,7 +390,7 @@ class ValhallaService {
       case 'gravel':
         return {
           bicycle: {
-            use_roads: 0.6,  // Mix of roads and gravel paths
+            use_roads: 0.3,  // Mix of roads and gravel paths
             avoid_bad_surfaces: false,  // OK with some rough terrain
           },
         };
