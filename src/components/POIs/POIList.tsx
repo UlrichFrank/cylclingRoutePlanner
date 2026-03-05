@@ -1,6 +1,6 @@
 import React from 'react';
 import { usePOIStore } from '../../store/poiStore';
-import { FoodMenu, Coffee, Bed, Baguette } from '@boxicons/react';
+import { renderIcon, POI_ICONS } from '../../utils/iconRegistry';
 
 export const POIList: React.FC = () => {
   const pois = usePOIStore((state) => state.pois);
@@ -19,10 +19,10 @@ export const POIList: React.FC = () => {
   }
 
   const typeIcons: Record<string, React.ReactNode> = {
-    restaurant: <FoodMenu />,
-    cafe: <Coffee />,
-    hotel: <Bed />,
-    bakery: <Baguette />,
+    restaurant: renderIcon('restaurant'),
+    cafe: renderIcon('cafe'),
+    hotel: renderIcon('hotel'),
+    bakery: renderIcon('bakery'),
   };
 
   return (

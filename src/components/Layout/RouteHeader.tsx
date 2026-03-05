@@ -3,7 +3,7 @@ import { Box, Flex, Heading, Text } from '@radix-ui/themes';
 import { useRouteStore } from '../../store/routeStore';
 import { ElevationProfile } from '../Routes/ElevationProfile';
 import { ThemeToggle } from './ThemeToggle';
-import { Mountain } from '@boxicons/react';
+import { renderIcon, ROUTE_ICONS } from '../../utils/iconRegistry';
 
 /**
  * Route Header Component
@@ -65,7 +65,7 @@ export function RouteHeader() {
           {/* Title and Stats on Left */}
           <Flex direction="column" gap="1" style={{ flex: 1 }}>
             <Heading weight="bold" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Mountain />
+              {renderIcon('mountain')}
               Cycling Route Planner
             </Heading>
             

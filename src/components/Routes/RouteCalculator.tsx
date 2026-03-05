@@ -10,7 +10,7 @@ import { usePOIStore } from '../../store/poiStore';
 import { valhallaService } from '../../services/valhallaService';
 import { searchPOIsNearRoute } from '../../services/overpassService';
 import { useTheme } from '../Layout/ThemeContext';
-import { Location, LoaderDots } from '@boxicons/react';
+import { renderIcon, NAV_ICONS } from '../../utils/iconRegistry';
 
 type ValhallaProfile = 'mountain' | 'road' | 'gravel';
 
@@ -269,12 +269,12 @@ export const RouteCalculator: React.FC<RouteCalculatorProps> = ({ onRouteCalcula
       >
         {isLoading ? (
           <>
-            <LoaderDots style={{ animation: 'spin 1s linear infinite' }} />
+            {renderIcon('loaderDots', { style: { animation: 'spin 1s linear infinite' } })}
             Berechne Route...
           </>
         ) : (
           <>
-            <Location />
+            {renderIcon('location')}
             Route berechnen
           </>
         )}

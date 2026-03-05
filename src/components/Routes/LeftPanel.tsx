@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { Menu, Plus, MenuClose, Mountain, LightBulb } from '@boxicons/react';
+import { renderIcon, POI_ICONS } from '../../utils/iconRegistry';
 import { useRouteStore, RouteCoordinate } from '../../store/routeStore';
 import { usePOIStore } from '../../store/poiStore';
 import { useTheme } from '../Layout/ThemeContext';
@@ -102,12 +102,12 @@ export const LeftPanel: React.FC = () => {
   const autocompleteTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastFetchedCoordinatesRef = useRef<string>('');
 
-  const poiFilters: Array<{ key: POIType; icon: string; label: string }> = [
-    { key: 'restaurant', icon: '🍽️', label: 'Restaurants' },
-    { key: 'cafe', icon: '☕', label: 'Cafés' },
-    { key: 'bakery', icon: '🥐', label: 'Bäckereien' },
-    { key: 'hotel', icon: '🏨', label: 'Hotels' },
-    { key: 'attraction', icon: '⭐', label: 'Sehenswürdigkeiten' },
+  const poiFilters: Array<{ key: POIType; icon: React.ReactNode; label: string }> = [
+    { key: 'restaurant', icon: renderIcon('restaurant'), label: 'Restaurants' },
+    { key: 'cafe', icon: renderIcon('cafe'), label: 'Cafés' },
+    { key: 'bakery', icon: renderIcon('bakery'), label: 'Bäckereien' },
+    { key: 'hotel', icon: renderIcon('hotel'), label: 'Hotels' },
+    { key: 'attraction', icon: renderIcon('attraction'), label: 'Sehenswürdigkeiten' },
   ];
 
   // Auto-update route coordinates when waypoints change
@@ -494,11 +494,11 @@ export const LeftPanel: React.FC = () => {
                   title="Fahrradtyp wechseln"
                 >
                   {currentRoute?.profile === 'mountain' ? (
-                    <Mountain />
+                    renderIcon('mountain')
                   ) : currentRoute?.profile === 'gravel' ? (
-                    <Mountain />
+                    renderIcon('gravel')
                   ) : (
-                    <LightBulb />
+                    renderIcon('road')
                   )}
                 </button>
               </DropdownMenu.Trigger>
@@ -522,7 +522,7 @@ export const LeftPanel: React.FC = () => {
                   }}
                   style={{ padding: '8px 12px', fontSize: '16px', cursor: 'pointer', textAlign: 'center', display: 'flex', justifyContent: 'center' }}
                 >
-                  <LightBulb />
+                  {renderIcon('road')}
                 </DropdownMenu.Item>
                 <DropdownMenu.Item
                   onClick={() => {
@@ -532,7 +532,7 @@ export const LeftPanel: React.FC = () => {
                   }}
                   style={{ padding: '8px 12px', fontSize: '16px', cursor: 'pointer', textAlign: 'center', display: 'flex', justifyContent: 'center' }}
                 >
-                  <Mountain />
+                  {renderIcon('mountain')}
                 </DropdownMenu.Item>
                 <DropdownMenu.Item
                   onClick={() => {
@@ -542,7 +542,7 @@ export const LeftPanel: React.FC = () => {
                   }}
                   style={{ padding: '8px 12px', fontSize: '16px', cursor: 'pointer', textAlign: 'center', display: 'flex', justifyContent: 'center' }}
                 >
-                  <Mountain />
+                  {renderIcon('gravel')}
                 </DropdownMenu.Item>
               </DropdownMenu.Content>
             </DropdownMenu.Root>
@@ -555,7 +555,7 @@ export const LeftPanel: React.FC = () => {
           <DropdownMenu.Root>
             <DropdownMenu.Trigger asChild>
               <button style={{ background: 'none', border: 'none', padding: '8px', cursor: 'pointer', color: colors.text }}>
-                <Menu />
+                {renderIcon('menu')}
               </button>
             </DropdownMenu.Trigger>
             <DropdownMenu.Content 
@@ -717,7 +717,7 @@ export const LeftPanel: React.FC = () => {
                         padding: '8px',
                       }}
                     >
-                      <MenuClose />
+                      {renderIcon('menuClose')}
                     </button>
                   )}
               </div>
@@ -743,7 +743,7 @@ export const LeftPanel: React.FC = () => {
                 color: colors.text,
               }}
             >
-              <Plus />
+              {renderIcon('plus')}
               <span>Punkt hinzufügen</span>
             </button>
           )}

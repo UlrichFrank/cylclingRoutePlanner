@@ -1,5 +1,5 @@
-import { Sun, Moon } from '@boxicons/react'
 import { useTheme } from './ThemeContext'
+import { renderIcon, THEME_ICONS } from '../../utils/iconRegistry'
 
 export const ThemeToggle = () => {
   const { theme, toggleTheme } = useTheme()
@@ -27,7 +27,7 @@ export const ThemeToggle = () => {
         e.currentTarget.style.backgroundColor = theme === 'dark' ? '#374151' : '#e5e7eb';
       }}
     >
-      {theme === 'dark' ? <Sun /> : <Moon />}
+      {theme === 'dark' ? renderIcon('sun') : renderIcon('moon')}
     </button>
   )
 }

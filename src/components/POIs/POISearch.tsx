@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { usePOIStore } from '../../store/poiStore';
 import { useRouteStore } from '../../store/routeStore';
 import { fetchPOIs } from '../../services/overpassService';
-import { FoodMenu, Coffee, Bed, Baguette } from '@boxicons/react';
+import { POI_ICONS } from '../../utils/iconRegistry';
 
 export const POISearch: React.FC = () => {
   const { setLoading, setError, setPOIs, activeType, setActiveType, radius, setRadius } = usePOIStore();
@@ -49,10 +49,10 @@ export const POISearch: React.FC = () => {
             onChange={(e) => setActiveType(e.target.value)}
             className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
-            <option value="restaurant">🍴 Restaurant</option>
-            <option value="cafe">☕ Café</option>
-            <option value="hotel">🏨 Hotel</option>
-            <option value="bakery">🥐 Bakery</option>
+            <option value="restaurant">Restaurant</option>
+            <option value="cafe">Café</option>
+            <option value="hotel">Hotel</option>
+            <option value="bakery">Bäckerei</option>
           </select>
         </div>
 
