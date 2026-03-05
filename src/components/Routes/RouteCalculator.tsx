@@ -10,7 +10,7 @@ import { usePOIStore } from '../../store/poiStore';
 import { valhallaService } from '../../services/valhallaService';
 import { searchPOIsNearRoute } from '../../services/overpassService';
 import { useTheme } from '../Layout/ThemeContext';
-import { MapPin, Loader } from 'lucide-react';
+import { Location, LoaderDots } from '@boxicons/react';
 
 type ValhallaProfile = 'mountain' | 'road' | 'gravel';
 
@@ -269,12 +269,12 @@ export const RouteCalculator: React.FC<RouteCalculatorProps> = ({ onRouteCalcula
       >
         {isLoading ? (
           <>
-            <Loader size={16} style={{ animation: 'spin 1s linear infinite' }} />
+            <LoaderDots style={{ animation: 'spin 1s linear infinite' }} />
             Berechne Route...
           </>
         ) : (
           <>
-            <MapPin size={16} />
+            <Location />
             Route berechnen
           </>
         )}

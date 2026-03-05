@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { usePOIStore } from '../../store/poiStore';
 import { useRouteStore } from '../../store/routeStore';
 import { fetchPOIs } from '../../services/overpassService';
-import { UtensilsCrossed, Coffee, Hotel, Croissant } from 'lucide-react';
+import { FoodMenu, Coffee, Bed, Baguette } from '@boxicons/react';
 
 export const POISearch: React.FC = () => {
   const { setLoading, setError, setPOIs, activeType, setActiveType, radius, setRadius } = usePOIStore();

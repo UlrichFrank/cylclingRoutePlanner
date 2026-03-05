@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@boxicons/react':
+        specifier: ^1.0.3
+        version: 1.0.3(react@18.3.1)
       '@radix-ui/react-context-menu':
         specifier: ^2.1.5
         version: 2.2.16(@types/react-dom@18.3.7(@types/react@18.3.28))(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -29,9 +32,6 @@ importers:
       leaflet:
         specifier: ^1.9.4
         version: 1.9.4
-      lucide-react:
-        specifier: ^0.577.0
-        version: 0.577.0(react@18.3.1)
       react:
         specifier: ^18.3.1
         version: 18.3.1
@@ -188,6 +188,11 @@ packages:
   '@babel/types@7.29.0':
     resolution: {integrity: sha512-LwdZHpScM4Qz8Xw2iKSzS+cfglZzJGvofQICy7W7v4caru4EaAmyUuO6BGrbyQ2mYV11W0U8j5mBhd14dd3B0A==}
     engines: {node: '>=6.9.0'}
+
+  '@boxicons/react@1.0.3':
+    resolution: {integrity: sha512-NASJNbk4X6Xi24CIa/Anx7KhMH1KPiBuaq0RJq3HJiFg65Ct9mhIB6j/a/Ciz/ZOTGaGzisWYmbU4jdKKK/YYA==}
+    peerDependencies:
+      react: '>=16.8.0'
 
   '@esbuild/aix-ppc64@0.21.5':
     resolution: {integrity: sha512-1SDgH6ZSPTlggy1yI6+Dbkiz8xzpHJEVAlF/AM1tHPLsf5STom9rwtjE4hKAF20FfXXNTFqEYXyJNWh1GiZedQ==}
@@ -2011,11 +2016,6 @@ packages:
   lru-cache@5.1.1:
     resolution: {integrity: sha512-KpNARQA3Iwv+jTA0utUVVbrh+Jlrr1Fv0e56GGzAFOXN7dk/FviaDW8LHmK52DlcH4WP2n6gI8vN1aesBFgo9w==}
 
-  lucide-react@0.577.0:
-    resolution: {integrity: sha512-4LjoFv2eEPwYDPg/CUdBJQSDfPyzXCRrVW1X7jrx/trgxnxkHFjnVZINbzvzxjN70dxychOfg+FTYwBiS3pQ5A==}
-    peerDependencies:
-      react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
-
   math-intrinsics@1.1.0:
     resolution: {integrity: sha512-/IXtbwEk5HTPyEwyKX6hGkYXxM9nbj64B+ilVJnC/R6B0pH5G4V3b0pVbL7DBj4tkhBAppbQUlf6F6Xl9LHu1g==}
     engines: {node: '>= 0.4'}
@@ -2669,6 +2669,10 @@ snapshots:
     dependencies:
       '@babel/helper-string-parser': 7.27.1
       '@babel/helper-validator-identifier': 7.28.5
+
+  '@boxicons/react@1.0.3(react@18.3.1)':
+    dependencies:
+      react: 18.3.1
 
   '@esbuild/aix-ppc64@0.21.5':
     optional: true
@@ -4429,10 +4433,6 @@ snapshots:
   lru-cache@5.1.1:
     dependencies:
       yallist: 3.1.1
-
-  lucide-react@0.577.0(react@18.3.1):
-    dependencies:
-      react: 18.3.1
 
   math-intrinsics@1.1.0: {}
 

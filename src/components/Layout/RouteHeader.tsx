@@ -3,7 +3,7 @@ import { Box, Flex, Heading, Text } from '@radix-ui/themes';
 import { useRouteStore } from '../../store/routeStore';
 import { ElevationProfile } from '../Routes/ElevationProfile';
 import { ThemeToggle } from './ThemeToggle';
-import { Bike } from 'lucide-react';
+import { Mountain } from '@boxicons/react';
 
 /**
  * Route Header Component
@@ -64,27 +64,27 @@ export function RouteHeader() {
         <Flex justify="between" align="center" gap="4">
           {/* Title and Stats on Left */}
           <Flex direction="column" gap="1" style={{ flex: 1 }}>
-            <Heading size="4" weight="bold" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Bike size={28} />
+            <Heading weight="bold" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Mountain />
               Cycling Route Planner
             </Heading>
             
             {/* Stats Row - Compact */}
             {geometry && (
               <Flex gap="4" align="center" wrap="wrap" style={{ fontSize: '12px' }}>
-                <Text size="2">
+                <Text>
                   <strong>{geometry.distance.toFixed(1)} km</strong>
                 </Text>
-                <Text size="2">
+                <Text>
                   ⬆️ <strong>{geometry.elevationGain} m</strong>
                 </Text>
-                <Text size="2">
+                <Text>
                   ⬇️ <strong>{geometry.elevationLoss} m</strong>
                 </Text>
-                <Text size="2">
+                <Text>
                   🏔️ <strong>{geometry.maxElevation} m</strong>
                 </Text>
-                <Text size="2">
+                <Text>
                   Schwierigkeit: <strong color={getDifficultyColor(currentRoute.difficultyLevel)}>
                     {getDifficultyLabel(currentRoute.difficultyLevel)}
                   </strong>

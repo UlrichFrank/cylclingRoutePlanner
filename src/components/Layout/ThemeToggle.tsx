@@ -1,4 +1,4 @@
-import { Sun, Moon } from 'lucide-react'
+import { Sun, Moon } from '@boxicons/react'
 import { useTheme } from './ThemeContext'
 
 export const ThemeToggle = () => {
@@ -27,7 +27,7 @@ export const ThemeToggle = () => {
         e.currentTarget.style.backgroundColor = theme === 'dark' ? '#374151' : '#e5e7eb';
       }}
     >
-      {theme === 'dark' ? <Sun size={24} /> : <Moon size={24} />}
+      {theme === 'dark' ? <Sun /> : <Moon />}
     </button>
   )
 }

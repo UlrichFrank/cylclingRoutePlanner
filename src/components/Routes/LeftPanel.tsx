@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { MoreHorizontal, Plus, X, Mountain, Zap, Bike } from 'lucide-react';
+import { Menu, Plus, MenuClose, Mountain, LightBulb } from '@boxicons/react';
 import { useRouteStore, RouteCoordinate } from '../../store/routeStore';
 import { usePOIStore } from '../../store/poiStore';
 import { useTheme } from '../Layout/ThemeContext';
@@ -494,11 +494,11 @@ export const LeftPanel: React.FC = () => {
                   title="Fahrradtyp wechseln"
                 >
                   {currentRoute?.profile === 'mountain' ? (
-                    <Mountain size={24} />
+                    <Mountain />
                   ) : currentRoute?.profile === 'gravel' ? (
-                    <Bike size={24} />
+                    <Mountain />
                   ) : (
-                    <Zap size={24} />
+                    <LightBulb />
                   )}
                 </button>
               </DropdownMenu.Trigger>
@@ -522,7 +522,7 @@ export const LeftPanel: React.FC = () => {
                   }}
                   style={{ padding: '8px 12px', fontSize: '16px', cursor: 'pointer', textAlign: 'center', display: 'flex', justifyContent: 'center' }}
                 >
-                  <Zap size={20} />
+                  <LightBulb />
                 </DropdownMenu.Item>
                 <DropdownMenu.Item
                   onClick={() => {
@@ -532,7 +532,7 @@ export const LeftPanel: React.FC = () => {
                   }}
                   style={{ padding: '8px 12px', fontSize: '16px', cursor: 'pointer', textAlign: 'center', display: 'flex', justifyContent: 'center' }}
                 >
-                  <Mountain size={20} />
+                  <Mountain />
                 </DropdownMenu.Item>
                 <DropdownMenu.Item
                   onClick={() => {
@@ -542,7 +542,7 @@ export const LeftPanel: React.FC = () => {
                   }}
                   style={{ padding: '8px 12px', fontSize: '16px', cursor: 'pointer', textAlign: 'center', display: 'flex', justifyContent: 'center' }}
                 >
-                  <Bike size={20} />
+                  <Mountain />
                 </DropdownMenu.Item>
               </DropdownMenu.Content>
             </DropdownMenu.Root>
@@ -555,7 +555,7 @@ export const LeftPanel: React.FC = () => {
           <DropdownMenu.Root>
             <DropdownMenu.Trigger asChild>
               <button style={{ background: 'none', border: 'none', padding: '8px', cursor: 'pointer', color: colors.text }}>
-                <MoreHorizontal size={24} />
+                <Menu />
               </button>
             </DropdownMenu.Trigger>
             <DropdownMenu.Content 
@@ -717,7 +717,7 @@ export const LeftPanel: React.FC = () => {
                         padding: '8px',
                       }}
                     >
-                      <X size={20} />
+                      <MenuClose />
                     </button>
                   )}
               </div>
@@ -743,7 +743,7 @@ export const LeftPanel: React.FC = () => {
                 color: colors.text,
               }}
             >
-              <Plus size={20} />
+              <Plus />
               <span>Punkt hinzufügen</span>
             </button>
           )}
