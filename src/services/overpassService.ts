@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { POI } from '../store/poiStore';
 import { RouteCoordinate } from '../store/routeStore';
+import * as turf from '@turf/turf';
 
 const OVERPASS_API = 'https://overpass-api.de/api/interpreter';
 
@@ -40,7 +41,7 @@ const rateLimitedRequest = async (query: string, attempt = 0): Promise<any> => {
         await sleep(backoffDelay);
         return rateLimitedRequest(query, attempt + 1);
       } else {
-        throw new Error('Overpass API rate limited. Using mock data instead.');
+        throw new Error('Overpass API rate limited. Max retries exceeded.');
       }
     }
     throw error;
@@ -66,8 +67,98 @@ const buildBBox = (coords: RouteCoordinate[], bufferDegrees = 0.01): BoundingBox
   };
 };
 
-const buildOverpassQuery = (bbox: BoundingBox, amenityType: string): string => {
-  return `[bbox:${bbox.south},${bbox.west},${bbox.north},${bbox.east}];(node["amenity"="${amenityType}"];way["amenity"="${amenityType}"];relation["amenity"="${amenityType}"];);out center;`;
+/**
+ * Build polygon string for Overpass from route coordinates using Turf buffer
+ * Creates a 3km buffer around the route (left and right side)
+ * Format: "lat1 lng1 lat2 lng2 ..." (space-separated, Overpass formats as polygon)
+ * @param coords Route coordinates
+ * @param bufferKm Buffer distance in kilometers (default: 3km)
+ * @returns Polygon string or null if coordinates too sparse
+ */
+function buildPolygonFromRoute(coords: RouteCoordinate[], bufferKm: number = 3): string | null {
+  if (coords.length < 2) {
+    console.warn('[POI] Route has too few coordinates for polygon');
+    return null;
+  }
+
+  try {
+    // Create LineString for Turf (uses [lng, lat] format)
+    const lineString = turf.lineString(coords.map(c => [c.lng, c.lat]));
+    
+    console.log(`[POI] Creating ${bufferKm}km buffer around ${coords.length} route points...`);
+    
+    // Create buffer polygon around the line
+    const bufferPolygon = turf.buffer(lineString, bufferKm, { units: 'kilometers' });
+    
+    if (!bufferPolygon || !bufferPolygon.geometry || !bufferPolygon.geometry.coordinates) {
+      console.error('[POI] Failed to create buffer polygon or extract coordinates');
+      return null;
+    }
+
+    // Extract outer ring coordinates from buffer polygon
+    const bufferCoords = bufferPolygon.geometry.coordinates[0];
+    
+    if (!bufferCoords || bufferCoords.length === 0) {
+      console.error('[POI] Buffer polygon has no coordinates');
+      return null;
+    }
+
+    console.log(`[POI] Buffer polygon: ${bufferCoords.length} points`);
+
+    // Convert to Overpass poly: format: "lat1 lng1 lat2 lng2 ..."
+    // Important: Overpass expects lat FIRST, then lng
+    const polygonStr = bufferCoords
+      .map(([lng, lat]) => `${lat} ${lng}`)
+      .join(' ');
+
+    console.log(`[POI] Polygon string length: ${polygonStr.length} chars`);
+    return polygonStr;
+  } catch (error) {
+    console.error('[POI] Error building buffer polygon:', error instanceof Error ? error.message : error);
+    return null;
+  }
+}
+
+/**
+ * Build Overpass query using polygon for precise route-based search
+ * Uses `poly:` filter syntax (NOT `polygon:`)
+ * Format: lat1 lng1 lat2 lng2 ... (space-separated, Overpass closes polygon automatically)
+ */
+function buildOverpassPolygonQuery(polygon: string): string {
+  return `[out:json][timeout:180];(
+  node["amenity"="restaurant"](poly:"${polygon}");
+  way["amenity"="restaurant"](poly:"${polygon}");
+  node["amenity"="cafe"](poly:"${polygon}");
+  way["amenity"="cafe"](poly:"${polygon}");
+  node["shop"="bakery"](poly:"${polygon}");
+  way["shop"="bakery"](poly:"${polygon}");
+  node["amenity"="bakery"](poly:"${polygon}");
+  way["amenity"="bakery"](poly:"${polygon}");
+  node["tourism"="attraction"](poly:"${polygon}");
+  way["tourism"="attraction"](poly:"${polygon}");
+);
+out center;`;
+}
+
+/**
+ * Fallback: build bbox query if polygon is too complex
+ */
+const buildOverpassBBoxQuery = (bbox: BoundingBox): string => {
+  return `[out:json][timeout:180];[bbox:${bbox.south},${bbox.west},${bbox.north},${bbox.east}];(
+  node["amenity"="restaurant"];
+  way["amenity"="restaurant"];
+  node["amenity"="cafe"];
+  way["amenity"="cafe"];
+  node["shop"="cafe"];
+  way["shop"="cafe"];
+  node["shop"="bakery"];
+  way["shop"="bakery"];
+  node["amenity"="bakery"];
+  way["amenity"="bakery"];
+  node["tourism"="attraction"];
+  way["tourism"="attraction"];
+);
+out center;`;
 };
 
 /**
@@ -93,9 +184,9 @@ function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: numbe
  * Attractions: ≤ 3km
  */
 function filterByDistance(pois: POI[], geometry: RouteCoordinate[]): POI[] {
-  return pois.filter((poi) => {
+  const filtered = pois.filter((poi) => {
     const venueMaxDist = 0.5; // km
-    const attractionMaxDist = 3; // km
+    const attractionMaxDist = 1.5; // km
     const maxDist = poi.type === 'attraction' ? attractionMaxDist : venueMaxDist;
 
     // Find minimum distance to any point on the route
@@ -105,6 +196,9 @@ function filterByDistance(pois: POI[], geometry: RouteCoordinate[]): POI[] {
 
     return minDistance <= maxDist;
   });
+
+  console.log(`[POI] Distance filter: ${pois.length} → ${filtered.length} POIs (kept ${((filtered.length/pois.length)*100).toFixed(1)}%)`);
+  return filtered;
 }
 
 /**
@@ -138,15 +232,28 @@ out center;`;
 function parseOverpassResponse(data: any): POI[] {
   const pois: POI[] = [];
 
-  if (!data.elements) return pois;
+  if (!data.elements) {
+    console.log('[POI] Response has no elements property');
+    return pois;
+  }
 
-  data.elements.forEach((element: any) => {
-    if (!element.tags || !element.tags.name) return;
+  console.log(`[POI] Parsing ${data.elements.length} elements from response`);
+
+  data.elements.forEach((element: any, idx: number) => {
+    if (!element.tags || !element.tags.name) {
+      if (idx < 3) console.log(`[POI] Element ${idx}: skipped (no tags or name)`, element);
+      return;
+    }
 
     const lat = element.center?.lat || element.lat;
     const lng = element.center?.lon || element.lon;
 
-    if (!lat || !lng) return;
+    if (!lat || !lng) {
+      if (idx < 3) console.log(`[POI] Element ${idx} ${element.tags.name}: skipped (no lat/lng)`);
+      return;
+    }
+
+    if (idx < 3) console.log(`[POI] Element ${idx} ${element.tags.name}: accepted (${lat}, ${lng})`);
 
     let type: POI['type'] = 'attraction';
     
@@ -175,56 +282,14 @@ function parseOverpassResponse(data: any): POI[] {
   return pois;
 }
 
-// Mock data for Berlin restaurants, cafes, hotels, bakeries, and attractions
-const MOCK_DATA: Record<string, POI[]> = {
-  restaurant: [
-    { id: 'r1', name: 'Restaurant Zur Post', lat: 52.52, lng: 13.405, type: 'restaurant', address: 'Alexanderplatz' },
-    { id: 'r2', name: 'Currywurst Stand', lat: 52.515, lng: 13.415, type: 'restaurant', address: 'Near Reichstag' },
-    { id: 'r3', name: 'Italian Trattoria', lat: 52.525, lng: 13.395, type: 'restaurant', address: 'Tiergarten' },
-    { id: 'r4', name: 'Berlin Burger House', lat: 52.505, lng: 13.425, type: 'restaurant', address: 'Mitte' },
-    { id: 'r5', name: 'Vietnamese Pho', lat: 52.53, lng: 13.410, type: 'restaurant', address: 'Prenzlauer Berg' },
-  ],
-  cafe: [
-    { id: 'c1', name: 'Espresso Corner', lat: 52.518, lng: 13.408, type: 'cafe', address: 'Brandenburger Tor' },
-    { id: 'c2', name: 'Coffee Lovers Café', lat: 52.524, lng: 13.400, type: 'cafe', address: 'Tiergarten' },
-    { id: 'c3', name: 'Vintage Kaffee', lat: 52.510, lng: 13.420, type: 'cafe', address: 'Museum Island' },
-    { id: 'c4', name: 'Breakfast Spot', lat: 52.528, lng: 13.412, type: 'cafe', address: 'Charlottenburg' },
-  ],
-  hotel: [
-    { id: 'h1', name: 'Hotel Berlin Central', lat: 52.520, lng: 13.410, type: 'hotel', address: 'Mitte' },
-    { id: 'h2', name: 'Luxury Tower Hotel', lat: 52.508, lng: 13.430, type: 'hotel', address: 'Alexanderplatz' },
-    { id: 'h3', name: 'Budget Hostel', lat: 52.532, lng: 13.408, type: 'hotel', address: 'Prenzlauer Berg' },
-    { id: 'h4', name: 'Modern Business Hotel', lat: 52.515, lng: 13.395, type: 'hotel', address: 'Tiergarten' },
-  ],
-  bakery: [
-    { id: 'b1', name: 'Bäckerei Schmidt', lat: 52.516, lng: 13.412, type: 'bakery', address: 'Unter den Linden' },
-    { id: 'b2', name: 'Bio Backhaus', lat: 52.525, lng: 13.408, type: 'bakery', address: 'Charlottenburg' },
-    { id: 'b3', name: 'Traditional Bakery', lat: 52.510, lng: 13.410, type: 'bakery', address: 'Mitte' },
-    { id: 'b4', name: 'Modern Bread Shop', lat: 52.530, lng: 13.415, type: 'bakery', address: 'Prenzlauer Berg' },
-  ],
-  attraction: [
-    { id: 'a1', name: 'Brandenburger Tor', lat: 52.516, lng: 13.378, type: 'attraction', address: 'Gate of Brandenburg' },
-    { id: 'a2', name: 'Reichstag', lat: 52.519, lng: 13.376, type: 'attraction', address: 'Parliament Building' },
-    { id: 'a3', name: 'Museum Island', lat: 52.517, lng: 13.399, type: 'attraction', address: 'Museums' },
-    { id: 'a4', name: 'Alexander Platz', lat: 52.520, lng: 13.415, type: 'attraction', address: 'Plaza' },
-    { id: 'a5', name: 'Berlin Wall Memorial', lat: 52.541, lng: 13.438, type: 'attraction', address: 'Wall' },
-  ],
-};
+
 
 export const fetchPOIs = async (
   coordinates: RouteCoordinate[],
   poiType: 'restaurant' | 'cafe' | 'hotel' | 'bakery' | 'attraction'
 ): Promise<POI[]> => {
-  const amenityMap: Record<string, string> = {
-    restaurant: 'restaurant',
-    cafe: 'cafe',
-    hotel: 'hotel',
-    bakery: 'bakery',
-    attraction: 'tourism',
-  };
-
   const bbox = buildBBox(coordinates);
-  const query = buildOverpassQuery(bbox, amenityMap[poiType]);
+  const query = buildOverpassBBoxQuery(bbox);
 
   try {
     const response = await axios.post(OVERPASS_API, query, {
@@ -244,58 +309,80 @@ export const fetchPOIs = async (
         tags: Object.keys(element.tags || {}),
       }));
   } catch (error) {
-    console.warn('Overpass API failed, using mock data instead:', error);
-    // Return mock data as fallback
-    return MOCK_DATA[poiType] || [];
+    console.warn('Overpass API failed:', error);
+    // Return empty array instead of mock data
+    return [];
   }
 };
 
 /**
- * Search POIs near a route with automatic distance filtering
- * Single efficient Overpass query for all POI types
- * Filters: 500m for venues, 3km for attractions
+ * Search POIs near a route and return both POIs and debug polygon
+ * Returns object with POIs array and optional polygon string for visualization
  */
-export async function searchPOIsNearRoute(geometry: RouteCoordinate[]): Promise<POI[]> {
+export interface POISearchResult {
+  pois: POI[];
+  debugPolygon: string | null;
+}
+
+/**
+ * Search POIs near a route using polygon-based Overpass query
+ * Polygon-based search is more accurate than bounding box for long routes
+ * Works for routes of any length (hundreds of km)
+ * 
+ * Query strategy:
+ * 1. Try polygon-based query (accurate, works for most routes)
+ * 2. Fallback to bbox if polygon is too complex
+ * 3. Apply distance filters (500m venues, 3km attractions)
+ */
+export async function searchPOIsNearRoute(geometry: RouteCoordinate[]): Promise<POISearchResult> {
   if (geometry.length < 2) {
     console.warn('[POI] Route geometry too short for POI search');
-    return [];
+    return { pois: [], debugPolygon: null };
   }
 
-  // Build bbox with buffer (5km for initial query to be safe) - needs to be outside try for error handler
-  const bufferDegrees = 5 / 111; // ~5km in degrees
-  const lats = geometry.map((c) => c.lat);
-  const lngs = geometry.map((c) => c.lng);
-
-  const bbox: BoundingBox = {
-    south: Math.min(...lats) - bufferDegrees,
-    west: Math.min(...lngs) - bufferDegrees,
-    north: Math.max(...lats) + bufferDegrees,
-    east: Math.max(...lngs) + bufferDegrees,
-  };
+  const cacheKeyPrefix = 'poi_cache_polygon';
+  let query: string;
+  let usedPolygon = false;
+  let debugPolygon: string | null = null;
 
   try {
-    const query = buildCombinedOverpassQuery(bbox);
+    // Try polygon-based query first (more accurate)
+    const polygon = buildPolygonFromRoute(geometry);
+    
+    if (polygon) {
+      debugPolygon = polygon;
+      console.log('[POI] Debug polygon created:', polygon.length, 'chars');
+      
+      query = buildOverpassPolygonQuery(polygon);
+      usedPolygon = true;
+      console.log('[POI] Using polygon-based Overpass query');
+    } else {
+      // Fallback to bbox if polygon failed
+      const bbox = buildBBox(geometry, 0.05); // 5km buffer
+      query = buildOverpassBBoxQuery(bbox);
+      console.log('[POI] Polygon failed, using bbox-based Overpass query as fallback');
+    }
 
-    console.log('[POI] Querying Overpass API for all POI types...');
+    console.log('[POI] Query length:', query.length, 'chars');
+    console.log('[POI] Querying Overpass API...');
+    if (usedPolygon) {
+      console.log('[POI] Polygon query first 500 chars:', query.substring(0, 500));
+    }
 
     const response = await axios.post(OVERPASS_API, query, {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      timeout: 15000,
+      timeout: 200000, // 200 seconds for complex polygon queries
     });
 
     console.log('[POI] Overpass response status:', response.status);
-    console.log('[POI] Overpass response elements count:', response.data.elements?.length || 0);
-    if (response.data.elements?.length > 0) {
-      console.log('[POI] First element sample:', response.data.elements[0]);
-    }
+    console.log('[POI] Overpass response elements:', response.data.elements?.length || 0);
 
     const allPois = parseOverpassResponse(response.data);
-    console.log(`[POI] Found ${allPois.length} POIs total`);
+    console.log(`[POI] Found ${allPois.length} POIs from Overpass`);
 
-    // Cache the results in localStorage
-    const cacheKey = `poi_cache_${bbox.south}_${bbox.west}_${bbox.north}_${bbox.east}`;
-    localStorage.setItem(cacheKey, JSON.stringify(allPois));
-    console.log('[POI] Cached results in localStorage');
+    // Cache the results
+    localStorage.setItem(cacheKeyPrefix, JSON.stringify(allPois));
+    console.log('[POI] Results cached');
 
     // Apply distance filters
     const filteredPois = filterByDistance(allPois, geometry);
@@ -303,38 +390,30 @@ export async function searchPOIsNearRoute(geometry: RouteCoordinate[]): Promise<
       `[POI] ${filteredPois.length} POIs within distance limits (500m venues, 3km attractions)`
     );
 
-    // Fallback to mock data if Overpass returns 0 results (likely area has no data)
-    if (filteredPois.length === 0) {
-      console.log('[POI] No real POIs found - falling back to mock data for demo');
-      const mockData = [...MOCK_DATA.restaurant, ...MOCK_DATA.cafe, ...MOCK_DATA.bakery, ...MOCK_DATA.attraction];
-      console.log('[POI] Mock data count:', mockData.length);
-      return mockData;
-    }
-
-    return filteredPois;
+    // Return real POIs with debug polygon
+    return { pois: filteredPois, debugPolygon };
   } catch (error: any) {
-    console.error('[POI] Error querying Overpass API:', error?.message || error);
+    console.error('[POI] Overpass API error:', error?.message || error);
+    console.error('[POI] Error details:', error?.response?.status, error?.response?.data);
     
     // Try to use cached data first
-    const cacheKey = `poi_cache_${bbox.south}_${bbox.west}_${bbox.north}_${bbox.east}`;
-    const cachedData = localStorage.getItem(cacheKey);
+    const cachedData = localStorage.getItem(cacheKeyPrefix);
     if (cachedData) {
-      console.log('[POI] Using cached POI data');
+      console.log('[POI] Using cached POI data from previous search');
       try {
         const pois = JSON.parse(cachedData);
         const filteredPois = filterByDistance(pois, geometry);
         if (filteredPois.length > 0) {
-          return filteredPois;
+          return { pois: filteredPois, debugPolygon };
         }
       } catch (e) {
         console.warn('[POI] Failed to parse cached data');
       }
     }
     
-    console.log('[POI] No cache found, falling back to mock data...');
-    const mockData = [...MOCK_DATA.restaurant, ...MOCK_DATA.cafe, ...MOCK_DATA.bakery, ...MOCK_DATA.attraction];
-    console.log('[POI] Mock data count:', mockData.length, 'items');
-    return mockData;
+    // If all fails, return empty array - better to show nothing than wrong region's data
+    console.warn('[POI] No cached data available and API failed. Returning empty POIs.');
+    return { pois: [], debugPolygon };
   }
 }
 

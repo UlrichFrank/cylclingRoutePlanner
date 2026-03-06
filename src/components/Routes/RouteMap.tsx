@@ -67,6 +67,8 @@ export const RouteMap: React.FC = () => {
   const currentRoute = useRouteStore((state: any) => state.currentRoute);
   const elevationProfilePosition = useRouteStore((state: any) => state.elevationProfilePosition);
   const pois = usePOIStore((state: any) => state.pois);
+  const showDebugPolygon = usePOIStore((state: any) => state.showDebugPolygon);
+  const debugPolygon = usePOIStore((state: any) => state.debugPolygon);
 
   useEffect(() => {
     console.log('[Map Init] useEffect called, mapContainer.current:', !!mapContainer.current);
@@ -284,7 +286,34 @@ export const RouteMap: React.FC = () => {
       });
       console.log('[RouteMap] POIs rendered. Total:', pois.length);
     }
-  }, [currentRoute, pois]);
+
+    // Debug: Draw search polygon on map if enabled
+    if (mapInstance.current && showDebugPolygon && debugPolygon) {
+      // Parse polygon string: "lat1 lng1 lat2 lng2 ..."
+      const coords = debugPolygon.split(' ').map(Number);
+      const polygonLatLngs: [number, number][] = [];
+      
+      for (let i = 0; i < coords.length; i += 2) {
+        if (coords[i] && coords[i + 1]) {
+          polygonLatLngs.push([coords[i], coords[i + 1]]);
+        }
+      }
+
+      if (polygonLatLngs.length > 0) {
+        console.log('[RouteMap] Drawing debug polygon with', polygonLatLngs.length, 'points');
+        const polygon = L.polygon(polygonLatLngs, {
+          color: '#ef4444',
+          weight: 2,
+          opacity: 0.6,
+          fill: true,
+          fillColor: '#fca5a5',
+          fillOpacity: 0.15,
+          dashArray: '5, 5',
+        });
+        routeLayerGroup.current?.addLayer(polygon);
+      }
+    }
+  }, [currentRoute, pois, showDebugPolygon, debugPolygon]);
 
   // Handle elevation profile position marker
   useEffect(() => {

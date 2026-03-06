@@ -6,13 +6,18 @@ server/node_modules/
 
 # Testing
 /coverage
+*.lcov
 
 # Production
 /dist
 /build
 
+# Vite
+.vite/
+
 # Misc
 .DS_Store
+Thumbs.db
 .env.local
 .env.*.local
 *.log
@@ -23,11 +28,29 @@ server/node_modules/
 .idea/
 *.swp
 *.swo
+*.iml
+.project
 
 # Backup
 *.bak
 .backup/
 
+# Database
+server/travelagent.db
+*.db
+*.sqlite
+
 # Server
 server/routes.json
-server/travelagent.db
+server/logs/
+
+# IDE & OS
+.classpath
+.c9/
+*.class
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache

@@ -46,7 +46,7 @@ export function RouteHeader() {
         left: '2%',
         right: 'auto',
         zIndex: 1000,
-        width: 'calc(100% - 2% - 8px - 384px - 20px)',
+        width: 'calc(96%)',
         maxWidth: '1200px',
       }}
     >
@@ -95,7 +95,7 @@ export function RouteHeader() {
 
           {/* Elevation Profile */}
           {geometry && (
-            <Box style={{ width: '400px', height: '80px', flexShrink: 0 }}>
+            <Box style={{ width: '400px', height: '50px', flexShrink: 0 }}>
               <ElevationProfile compact={true} />
             </Box>
           )}
