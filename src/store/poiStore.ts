@@ -36,7 +36,7 @@ export const usePOIStore = create<POIStore>((set) => ({
   activeType: 'restaurant',
   radius: 1000,
   debugPolygon: null,
-  showDebugPolygon: true, // Always show debug polygon
+  showDebugPolygon: false, // Hide debug polygon by default
   setPOIs: (pois: POI[]) => set({ pois }),
   setLoading: (loading: boolean) => set({ loading }),
   setError: (error: string | null) => set({ error }),
