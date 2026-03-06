@@ -97,7 +97,14 @@ export const LeftPanel: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [fetchFailed, setFetchFailed] = useState(false);
   const { setRoute, currentRoute } = useRouteStore();
-  const { setPOIs } = usePOIStore();
+  const { setPOIs, pois: allPOIs } = usePOIStore();
+  const [allPOIsByType, setAllPOIsByType] = useState<Record<POIType, any[]>>({
+    restaurant: [],
+    cafe: [],
+    bakery: [],
+    hotel: [],
+    attraction: [],
+  });
   const fetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autocompleteTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastFetchedCoordinatesRef = useRef<string>('');
@@ -134,6 +141,26 @@ export const LeftPanel: React.FC = () => {
       });
     }
   }, [waypoints]);
+
+  // When POIs are fetched from RouteCalculator, organize them by type
+  useEffect(() => {
+    const organizedByType: Record<POIType, any[]> = {
+      restaurant: [],
+      cafe: [],
+      bakery: [],
+      hotel: [],
+      attraction: [],
+    };
+
+    allPOIs.forEach((poi: any) => {
+      if (organizedByType[poi.type as POIType]) {
+        organizedByType[poi.type as POIType].push(poi);
+      }
+    });
+
+    setAllPOIsByType(organizedByType);
+    console.log('[LeftPanel] Organized POIs by type:', organizedByType);
+  }, [allPOIs]);
 
   // Sync routeStore waypoints (from map context menu) to local state
   useEffect(() => {
@@ -422,15 +449,20 @@ export const LeftPanel: React.FC = () => {
 
   // Toggle filter - only change display, no fetching
   const handleFilterToggle = (filterType: POIType) => {
+    console.log('[LeftPanel] Toggling filter:', filterType, 'Current state:', activeFilters[filterType]);
     const newFilters = { ...activeFilters, [filterType]: !activeFilters[filterType] };
     setActiveFilters(newFilters);
 
-    // Combine POIs from active filters
+    // Combine POIs from active filters using the organized POIs
     const activePOITypes: POIType[] = Object.entries(newFilters)
       .filter(([_, active]) => active)
       .map(([type]) => type as POIType);
 
-    const allActivePOIs = activePOITypes.flatMap(type => fetchedPOIs[type] || []);
+    console.log('[LeftPanel] Active POI types:', activePOITypes);
+    console.log('[LeftPanel] All POIs by type:', allPOIsByType);
+    
+    const allActivePOIs = activePOITypes.flatMap(type => allPOIsByType[type] || []);
+    console.log('[LeftPanel] All active POIs to display:', allActivePOIs.length);
     setPOIs(allActivePOIs);
   };
 
