@@ -176,13 +176,10 @@ export const RouteCalculator: React.FC<RouteCalculatorProps> = ({ onRouteCalcula
       // Search for POIs near the calculated route
       console.log('[RouteCalculator] Attempting POI search with geometry length:', allGeometry.length);
       try {
-        const result = await searchPOIsNearRoute(allGeometry);
-        console.log('[RouteCalculator] Found', result.pois.length, 'POIs:', result.pois.slice(0, 3));
-        usePOIStore.setState({ 
-          pois: result.pois, 
-          debugPolygon: result.debugPolygon 
-        });
-        console.log('[RouteCalculator] POIs and debug polygon set in store');
+        const pois = await searchPOIsNearRoute(allGeometry);
+        console.log('[RouteCalculator] Found', pois.length, 'POIs:', pois.slice(0, 3));
+        usePOIStore.setState({ pois });
+        console.log('[RouteCalculator] POIs set in store');
       } catch (poiError) {
         console.error('[RouteCalculator] POI search failed:', poiError);
         console.warn('[RouteCalculator] Continuing without POIs');

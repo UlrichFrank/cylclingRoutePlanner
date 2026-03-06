@@ -73,22 +73,6 @@ export const LeftPanel: React.FC = () => {
     { label: 'A', placeholder: '', lat: 0, lng: 0, isLocked: false },
   ]);
 
-  const [activeFilters, setActiveFilters] = useState<POIFilterState>({
-    restaurant: false,
-    cafe: false,
-    bakery: false,
-    hotel: false,
-    attraction: false,
-  });
-
-  const [fetchedPOIs, setFetchedPOIs] = useState<Record<POIType, any[]>>({
-    restaurant: [],
-    cafe: [],
-    bakery: [],
-    hotel: [],
-    attraction: [],
-  });
-
   const [autocompleteSuggestions, setAutocompleteSuggestions] = useState<any[]>([]);
   const [autocompleteLoading, setAutocompleteLoading] = useState(false);
   const [activeWaypointIndex, setActiveWaypointIndex] = useState<number | null>(null);
@@ -97,14 +81,8 @@ export const LeftPanel: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [fetchFailed, setFetchFailed] = useState(false);
   const { setRoute, currentRoute } = useRouteStore();
-  const { setPOIs, pois: allPOIs } = usePOIStore();
-  const [allPOIsByType, setAllPOIsByType] = useState<Record<POIType, any[]>>({
-    restaurant: [],
-    cafe: [],
-    bakery: [],
-    hotel: [],
-    attraction: [],
-  });
+  const { pois: allPOIs, activeFilters, toggleFilter } = usePOIStore();
+  
   const fetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autocompleteTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastFetchedCoordinatesRef = useRef<string>('');
@@ -141,26 +119,6 @@ export const LeftPanel: React.FC = () => {
       });
     }
   }, [waypoints]);
-
-  // When POIs are fetched from RouteCalculator, organize them by type
-  useEffect(() => {
-    const organizedByType: Record<POIType, any[]> = {
-      restaurant: [],
-      cafe: [],
-      bakery: [],
-      hotel: [],
-      attraction: [],
-    };
-
-    allPOIs.forEach((poi: any) => {
-      if (organizedByType[poi.type as POIType]) {
-        organizedByType[poi.type as POIType].push(poi);
-      }
-    });
-
-    setAllPOIsByType(organizedByType);
-    console.log('[LeftPanel] Organized POIs by type:', organizedByType);
-  }, [allPOIs]);
 
   // Sync routeStore waypoints (from map context menu) to local state
   useEffect(() => {
@@ -225,69 +183,6 @@ export const LeftPanel: React.FC = () => {
     const [removed] = newWaypoints.splice(fromIndex, 1);
     newWaypoints.splice(toIndex, 0, removed);
     setWaypoints(relabelWaypoints(newWaypoints));
-  };
-
-  // Fetch POIs asynchronously - NOW MANUAL ONLY (called explicitly, not auto-triggered)
-  const fetchPOIsManually = async () => {
-    if (!currentRoute || !currentRoute.waypoints || currentRoute.waypoints.length === 0) return;
-
-    setLoading(true);
-    setFetchFailed(false);
-    
-    try {
-      const newFetchedPOIs: Record<POIType, any[]> = {
-        restaurant: [],
-        cafe: [],
-        bakery: [],
-        hotel: [],
-        attraction: [],
-      };
-
-      let hasFetchErrors = false;
-
-      // Fetch for all types sequentially with small delays to avoid rate limiting
-      for (let i = 0; i < poiFilters.length; i++) {
-        const filter = poiFilters[i];
-        try {
-          const results = await fetchPOIs(currentRoute.waypoints, filter.key as any);
-          const filtered = results.filter((poi: any) => {
-            const distance = calculateDistanceToRoute(poi.lat, poi.lng, currentRoute.waypoints);
-            return distance <= 1.0;
-          });
-          newFetchedPOIs[filter.key] = filtered;
-          
-          // Small delay between requests to avoid rate limiting
-          if (i < poiFilters.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 300));
-          }
-        } catch (error) {
-          console.error(`Error fetching ${filter.key}:`, error);
-          hasFetchErrors = true;
-          newFetchedPOIs[filter.key] = [];
-        }
-      }
-
-      if (!hasFetchErrors) {
-        setFetchedPOIs(newFetchedPOIs);
-        lastFetchedCoordinatesRef.current = JSON.stringify(currentRoute.waypoints);
-
-        // Update display with currently active filters
-        const activePOITypes: POIType[] = Object.entries(activeFilters)
-          .filter(([_, active]) => active)
-          .map(([type]) => type as POIType);
-
-        const allActivePOIs = activePOITypes.flatMap(type => newFetchedPOIs[type] || []);
-        setPOIs(allActivePOIs);
-      } else {
-        setFetchFailed(true);
-        console.warn('POI fetch failed');
-      }
-    } catch (error) {
-      console.error('Unexpected error during POI fetch:', error);
-      setFetchFailed(true);
-    } finally {
-      setLoading(false);
-    }
   };
 
   // Listen for waypoint set from context menu
@@ -450,20 +345,7 @@ export const LeftPanel: React.FC = () => {
   // Toggle filter - only change display, no fetching
   const handleFilterToggle = (filterType: POIType) => {
     console.log('[LeftPanel] Toggling filter:', filterType, 'Current state:', activeFilters[filterType]);
-    const newFilters = { ...activeFilters, [filterType]: !activeFilters[filterType] };
-    setActiveFilters(newFilters);
-
-    // Combine POIs from active filters using the organized POIs
-    const activePOITypes: POIType[] = Object.entries(newFilters)
-      .filter(([_, active]) => active)
-      .map(([type]) => type as POIType);
-
-    console.log('[LeftPanel] Active POI types:', activePOITypes);
-    console.log('[LeftPanel] All POIs by type:', allPOIsByType);
-    
-    const allActivePOIs = activePOITypes.flatMap(type => allPOIsByType[type] || []);
-    console.log('[LeftPanel] All active POIs to display:', allActivePOIs.length);
-    setPOIs(allActivePOIs);
+    toggleFilter(filterType);
   };
 
   // Drag-and-Drop handlers for waypoint reordering

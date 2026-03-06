@@ -316,42 +316,25 @@ export const fetchPOIs = async (
 };
 
 /**
- * Search POIs near a route and return both POIs and debug polygon
- * Returns object with POIs array and optional polygon string for visualization
+ * Search POIs near a route
+ * Returns promise with POI array
  */
-export interface POISearchResult {
-  pois: POI[];
-  debugPolygon: string | null;
-}
-
-/**
- * Search POIs near a route using polygon-based Overpass query
- * Polygon-based search is more accurate than bounding box for long routes
- * Works for routes of any length (hundreds of km)
- * 
- * Query strategy:
- * 1. Try polygon-based query (accurate, works for most routes)
- * 2. Fallback to bbox if polygon is too complex
- * 3. Apply distance filters (500m venues, 3km attractions)
- */
-export async function searchPOIsNearRoute(geometry: RouteCoordinate[]): Promise<POISearchResult> {
-  if (geometry.length < 2) {
-    console.warn('[POI] Route geometry too short for POI search');
-    return { pois: [], debugPolygon: null };
-  }
+  export async function searchPOIsNearRoute(geometry: RouteCoordinate[]): Promise<POI[]> {
+    if (geometry.length < 2) {
+      console.warn('[POI] Route geometry too short for POI search');
+      return [];
+    }
 
   const cacheKeyPrefix = 'poi_cache_polygon';
   let query: string;
   let usedPolygon = false;
-  let debugPolygon: string | null = null;
 
   try {
     // Try polygon-based query first (more accurate)
     const polygon = buildPolygonFromRoute(geometry);
     
     if (polygon) {
-      debugPolygon = polygon;
-      console.log('[POI] Debug polygon created:', polygon.length, 'chars');
+      console.log('[POI] Buffer polygon created:', polygon.length, 'chars');
       
       query = buildOverpassPolygonQuery(polygon);
       usedPolygon = true;
@@ -390,8 +373,8 @@ export async function searchPOIsNearRoute(geometry: RouteCoordinate[]): Promise<
       `[POI] ${filteredPois.length} POIs within distance limits (500m venues, 3km attractions)`
     );
 
-    // Return real POIs with debug polygon
-    return { pois: filteredPois, debugPolygon };
+    // Return real POIs
+    return filteredPois;
   } catch (error: any) {
     console.error('[POI] Overpass API error:', error?.message || error);
     console.error('[POI] Error details:', error?.response?.status, error?.response?.data);
@@ -404,7 +387,7 @@ export async function searchPOIsNearRoute(geometry: RouteCoordinate[]): Promise<
         const pois = JSON.parse(cachedData);
         const filteredPois = filterByDistance(pois, geometry);
         if (filteredPois.length > 0) {
-          return { pois: filteredPois, debugPolygon };
+          return filteredPois;
         }
       } catch (e) {
         console.warn('[POI] Failed to parse cached data');
@@ -413,7 +396,7 @@ export async function searchPOIsNearRoute(geometry: RouteCoordinate[]): Promise<
     
     // If all fails, return empty array - better to show nothing than wrong region's data
     console.warn('[POI] No cached data available and API failed. Returning empty POIs.');
-    return { pois: [], debugPolygon };
+    return [];
   }
 }
 
