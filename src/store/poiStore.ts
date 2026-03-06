@@ -7,8 +7,10 @@ export interface POI {
   lng: number;
   type: 'restaurant' | 'cafe' | 'hotel' | 'bakery' | 'attraction';
   address?: string;
+  website?: string;
+  phone?: string;
   distance?: number;
-  tags?: string[];
+  tags?: Record<string, string>;
 }
 
 interface POIStore {

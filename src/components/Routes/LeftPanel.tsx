@@ -80,7 +80,7 @@ export const LeftPanel: React.FC = () => {
 
   const [loading, setLoading] = useState(false);
   const [fetchFailed, setFetchFailed] = useState(false);
-  const { setRoute, currentRoute } = useRouteStore();
+  const { setRoute, currentRoute, routes: savedRoutes, loadRoute } = useRouteStore();
   const { pois: allPOIs, activeFilters, toggleFilter } = usePOIStore();
   
   const fetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -490,7 +490,80 @@ export const LeftPanel: React.FC = () => {
             </DropdownMenu.Root>
 
             {/* Route Title Text */}
-            <span style={{ fontSize: '16px', fontWeight: '600', color: colors.text }}>Route</span>
+            <DropdownMenu.Root>
+              <DropdownMenu.Trigger asChild>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', flex: 1, overflow: 'hidden' }}>
+                  <span style={{ fontSize: '16px', fontWeight: '600', color: colors.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {currentRoute?.name || 'Route'}
+                  </span>
+                  <span style={{ fontSize: '12px', opacity: 0.5, marginLeft: '4px' }}>▼</span>
+                </div>
+              </DropdownMenu.Trigger>
+              <DropdownMenu.Content
+                style={{
+                  width: '300px',
+                  maxHeight: '400px',
+                  overflowY: 'auto',
+                  backgroundColor: colors.bg,
+                  backdropFilter: 'blur(12px)',
+                  WebkitBackdropFilter: 'blur(12px)',
+                  border: `1px solid ${colors.border}`,
+                  borderRadius: '12px',
+                  boxShadow: '0 10px 40px rgba(0,0,0,0.15)',
+                  padding: '8px',
+                  color: colors.text,
+                  zIndex: 1010,
+                }}
+              >
+                <div style={{ padding: '4px 8px 8px', fontSize: '12px', opacity: 0.6, fontWeight: 'bold' }}>Zuletzt berechnet</div>
+                {savedRoutes.sort((a, b) => b.updatedAt - a.updatedAt).map(route => (
+                  <DropdownMenu.Item
+                    key={route.id}
+                    onClick={() => {
+                      loadRoute(route.id);
+                    }}
+                    style={{ padding: '10px 12px', borderRadius: '8px', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '2px', backgroundColor: currentRoute?.id === route.id ? colors.mutedBg : 'transparent' }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = colors.mutedBg; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = currentRoute?.id === route.id ? colors.mutedBg : 'transparent'; }}
+                  >
+                    <div style={{ fontWeight: '500', fontSize: '14px' }}>{route.name}</div>
+                    <div style={{ fontSize: '12px', opacity: 0.7, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        {renderIcon(route.profile, { width: 14, height: 14 })}
+                      </span>
+                      {route.geometry ? <span>{(route.geometry.distance).toFixed(1)} km</span> : null}
+                      <span>·</span>
+                      <span>{new Date(route.updatedAt).toLocaleDateString()}</span>
+                    </div>
+                  </DropdownMenu.Item>
+                ))}
+                {savedRoutes.length === 0 && (
+                  <div style={{ padding: '16px 8px', fontSize: '14px', opacity: 0.5, textAlign: 'center' }}>Keine Routen gespeichert</div>
+                )}
+                <div style={{ height: '1px', backgroundColor: colors.border, margin: '8px 0' }} />
+                <DropdownMenu.Item
+                    onClick={() => {
+                      setRoute({
+                        id: 'new-route',
+                        name: 'Neue Route',
+                        description: '',
+                        waypoints: [],
+                        geometry: undefined,
+                        profile: 'road',
+                        difficultyLevel: 'easy',
+                        createdAt: Date.now(),
+                        updatedAt: Date.now(),
+                      });
+                    }}
+                    style={{ padding: '10px 12px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', color: '#0ea5e9', fontWeight: '500', fontSize: '14px' }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = colors.mutedBg; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                  >
+                    {renderIcon('plus', { width: 16, height: 16 })}
+                    Neue Route erstellen
+                </DropdownMenu.Item>
+              </DropdownMenu.Content>
+            </DropdownMenu.Root>
           </div>
 
           {/* Settings Menu */}
@@ -673,8 +746,8 @@ export const LeftPanel: React.FC = () => {
               <button
                 onClick={handleAddWaypoint}
                 style={{
-                  width: '52px',
-                  height: '52px',
+                  width: '40px',
+                  height: '40px',
                   backgroundColor: colors.mutedBg,
                   border: `1px solid ${colors.border}`,
                   borderRadius: '50%',
@@ -689,7 +762,7 @@ export const LeftPanel: React.FC = () => {
                 }}
                 title="Punkt hinzufügen"
               >
-                {renderIcon('plus', { width: 24, height: 24 })}
+                {renderIcon('plus', { width: 20, height: 20 })}
               </button>
             )}
 

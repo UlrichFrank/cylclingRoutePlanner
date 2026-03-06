@@ -275,7 +275,10 @@ function parseOverpassResponse(data: any): POI[] {
       lat,
       lng,
       type,
-      address: element.tags['addr:full'] || element.tags['addr:street'],
+      address: element.tags['addr:full'] || element.tags['addr:street'] || element.tags['addr:city'] ? `${element.tags['addr:street'] || ''} ${element.tags['addr:housenumber'] || ''}, ${element.tags['addr:city'] || ''}`.trim().replace(/^,|,$/g, '') : undefined,
+      website: element.tags.website || element.tags['contact:website'],
+      phone: element.tags.phone || element.tags['contact:phone'],
+      tags: element.tags,
     });
   });
 

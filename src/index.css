@@ -1,3 +1,5 @@
+@import "leaflet.markercluster/dist/MarkerCluster.css";
+@import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -82,3 +84,4 @@
 
 .leaflet-bar a:hover { background-color: hsl(var(--muted)) !important; color: hsl(var(--foreground)) !important; }
 .leaflet-control-zoom-in.leaflet-disabled, .leaflet-control-zoom-out.leaflet-disabled { background-color: hsl(var(--background) / 0.85) !important; backdrop-filter: blur(12px) !important; -webkit-backdrop-filter: blur(12px) !important; color: hsl(var(--muted-foreground)) !important; opacity: 0.5 !important; cursor: not-allowed !important; }
+

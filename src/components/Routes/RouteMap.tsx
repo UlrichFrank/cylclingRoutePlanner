@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
+import 'leaflet.markercluster';
 import { useRouteStore } from '../../store/routeStore';
 import { usePOIStore } from '../../store/poiStore';
 import { POI_COLORS } from '../../types/poi';
@@ -113,7 +114,14 @@ export const RouteMap: React.FC = () => {
 
             // Create layer groups
             routeLayerGroup.current = L.layerGroup().addTo(mapInstance.current);
-            poiLayerGroup.current = L.layerGroup().addTo(mapInstance.current);
+            // Ignore type error since markerClusterGroup is added by leaflet.markercluster plugin
+            // @ts-ignore
+            poiLayerGroup.current = L.markerClusterGroup({
+              showCoverageOnHover: false,
+              maxClusterRadius: 40,
+              spiderfyOnMaxZoom: true,
+              zoomToBoundsOnClick: true,
+            }).addTo(mapInstance.current);
 
             // Track drag state properly
             mapInstance.current.on('dragstart', () => {
@@ -282,7 +290,28 @@ export const RouteMap: React.FC = () => {
         // Get icon based on POI type, fallback to default
         const icon = poiMarkerIcons[poi.type] || defaultMarkerIcon;
         const marker = L.marker([poi.lat, poi.lng], { icon });
-        marker.bindPopup(`<b>${poi.name}</b><br/>${poi.type}`);
+        
+        let popupContent = `
+          <div style="font-family: system-ui, sans-serif; min-width: 150px;">
+            <strong style="display: block; font-size: 14px; margin-bottom: 4px;">${poi.name}</strong>
+            <span style="display: inline-block; padding: 2px 6px; background-color: var(--gray-3); border-radius: 4px; font-size: 11px; text-transform: capitalize;">${poi.type}</span>
+        `;
+        
+        if (poi.address) {
+          popupContent += `<div style="margin-top: 8px; font-size: 12px;">📍 ${poi.address}</div>`;
+        }
+        
+        if (poi.website) {
+          popupContent += `<div style="margin-top: 4px; font-size: 12px;">🌐 <a href="${poi.website.startsWith('http') ? poi.website : 'https://' + poi.website}" target="_blank" rel="noopener noreferrer">${poi.website}</a></div>`;
+        }
+        
+        if (poi.phone) {
+          popupContent += `<div style="margin-top: 4px; font-size: 12px;">📞 <a href="tel:${poi.phone}">${poi.phone}</a></div>`;
+        }
+        
+        popupContent += `</div>`;
+        
+        marker.bindPopup(popupContent);
         poiLayerGroup.current?.addLayer(marker);
       });
       console.log('[RouteMap] POIs rendered. Total visible:', visiblePOIs.length);

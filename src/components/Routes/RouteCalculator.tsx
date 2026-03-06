@@ -21,7 +21,7 @@ interface RouteCalculatorProps {
 export const RouteCalculator: React.FC<RouteCalculatorProps> = ({ onRouteCalculated }) => {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
-  const { currentRoute, setRoute } = useRouteStore();
+  const { currentRoute, setRoute, saveRoute } = useRouteStore();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const calcTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -149,9 +149,12 @@ export const RouteCalculator: React.FC<RouteCalculatorProps> = ({ onRouteCalcula
       console.log('[RouteCalculator] Total distance:', totalDistance.toFixed(2), 'meters');
       console.log('[RouteCalculator] Total elevation gain:', totalElevationGain.toFixed(2), 'meters');
 
-      // Update route with aggregated data
-      setRoute({
+      // Update route with aggregated data and save to persist
+      saveRoute({
         ...currentRoute,
+        id: currentRoute.id === 'new-route' ? `route-${Date.now()}` : currentRoute.id,
+        name: currentRoute.name === 'Neue Route' ? `Route ${new Date().toLocaleDateString()}` : currentRoute.name,
+        updatedAt: Date.now(),
         profile,
         geometry: {
           geometry: allGeometry,
@@ -220,8 +223,11 @@ export const RouteCalculator: React.FC<RouteCalculatorProps> = ({ onRouteCalcula
           return sum + R * c;
         }, 0);
 
-        setRoute({
+        saveRoute({
           ...currentRoute,
+          id: currentRoute.id === 'new-route' ? `route-${Date.now()}` : currentRoute.id,
+          name: currentRoute.name === 'Neue Route' ? `Route ${new Date().toLocaleDateString()}` : currentRoute.name,
+          updatedAt: Date.now(),
           profile,
           geometry: {
             geometry,
@@ -253,7 +259,7 @@ export const RouteCalculator: React.FC<RouteCalculatorProps> = ({ onRouteCalcula
         disabled={!hasValidWaypoints || isLoading}
         style={{
           width: '100%',
-          height: '52px',
+          height: '40px',
           padding: '0 16px',
           backgroundColor: hasValidWaypoints && !isLoading ? colors.primary : colors.mutedBg,
           border: 'none',
