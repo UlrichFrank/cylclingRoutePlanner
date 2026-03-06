@@ -48,10 +48,10 @@ export const RouteCalculator: React.FC<RouteCalculatorProps> = ({ onRouteCalcula
 
   // Color theme
   const colors = {
-    bg: isDark ? 'hsl(222.2, 84%, 4.9%)' : 'hsl(0, 0%, 100%)',
-    border: isDark ? 'hsl(217.2, 32.6%, 17.5%)' : 'hsl(214.3, 31.8%, 91.4%)',
+    bg: 'transparent',
+    border: isDark ? 'hsla(217.2, 32.6%, 17.5%, 0.5)' : 'hsla(214.3, 31.8%, 91.4%, 0.7)',
     text: isDark ? 'hsl(210, 40%, 98%)' : 'hsl(222.2, 84%, 4.9%)',
-    mutedBg: isDark ? 'hsl(217.2, 32.6%, 17.5%)' : 'hsl(210, 40%, 96%)',
+    mutedBg: isDark ? 'hsla(217.2, 32.6%, 17.5%, 0.5)' : 'hsla(210, 40%, 96%, 0.8)',
     primary: '#0ea5e9',
     error: '#dc2626',
   };
@@ -246,23 +246,18 @@ export const RouteCalculator: React.FC<RouteCalculatorProps> = ({ onRouteCalcula
   const hasGeometry = currentRoute?.geometry !== undefined;
 
   return (
-    <div
-      style={{
-        padding: '16px',
-        borderBottom: `1px solid ${colors.border}`,
-        backgroundColor: colors.bg,
-      }}
-    >
+    <div style={{ width: '100%' }}>
       {/* Calculate Button */}
       <button
         onClick={handleCalculateRoute}
         disabled={!hasValidWaypoints || isLoading}
         style={{
           width: '100%',
-          padding: '12px 16px',
+          height: '52px',
+          padding: '0 16px',
           backgroundColor: hasValidWaypoints && !isLoading ? colors.primary : colors.mutedBg,
           border: 'none',
-          borderRadius: '8px',
+          borderRadius: '20px',
           color: hasValidWaypoints && !isLoading ? 'white' : colors.text,
           fontSize: '14px',
           fontWeight: '600',
@@ -273,6 +268,7 @@ export const RouteCalculator: React.FC<RouteCalculatorProps> = ({ onRouteCalcula
           alignItems: 'center',
           justifyContent: 'center',
           gap: '8px',
+          boxSizing: 'border-box',
         }}
       >
         {isLoading ? (

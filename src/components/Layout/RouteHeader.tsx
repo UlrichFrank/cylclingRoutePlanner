@@ -4,12 +4,18 @@ import { useRouteStore } from '../../store/routeStore';
 import { ElevationProfile } from '../Routes/ElevationProfile';
 import { ThemeToggle } from './ThemeToggle';
 import { renderIcon, ROUTE_ICONS } from '../../utils/iconRegistry';
+import { useTheme } from './ThemeContext';
 
 /**
  * Route Header Component
  * Displays current route statistics and elevation profile in a compact layout
  */
 export function RouteHeader() {
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+  
+  const backgroundColor = isDark ? 'hsla(222.2, 84%, 4.9%, 0.85)' : 'hsla(0, 0%, 100%, 0.85)';
+
   const currentRoute = useRouteStore((state) => state.currentRoute);
   const geometry = currentRoute?.geometry;
 
@@ -47,7 +53,6 @@ export function RouteHeader() {
         right: 'auto',
         zIndex: 1000,
         width: 'calc(96%)',
-        maxWidth: '1200px',
       }}
     >
       {/* Header Box */}
@@ -56,8 +61,9 @@ export function RouteHeader() {
           borderRadius: '32px',
           border: '1px solid var(--gray-6)',
           padding: '8px 12px',
-          backgroundColor: 'var(--color-background)',
-          backdropFilter: 'blur(8px)',
+          backgroundColor: backgroundColor,
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
           boxShadow: '0 10px 40px rgba(0,0,0,0.1)',
         }}
       >

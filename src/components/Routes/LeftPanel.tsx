@@ -61,12 +61,12 @@ export const LeftPanel: React.FC = () => {
 
   // Color theme
   const colors = {
-    bg: isDark ? 'hsl(222.2, 84%, 4.9%)' : 'hsl(0, 0%, 100%)',
-    border: isDark ? 'hsl(217.2, 32.6%, 17.5%)' : 'hsl(214.3, 31.8%, 91.4%)',
+    bg: isDark ? 'hsla(222.2, 84%, 4.9%, 0.85)' : 'hsla(0, 0%, 100%, 0.85)',
+    border: isDark ? 'hsla(217.2, 32.6%, 17.5%, 0.5)' : 'hsla(214.3, 31.8%, 91.4%, 0.7)',
     text: isDark ? 'hsl(210, 40%, 98%)' : 'hsl(222.2, 84%, 4.9%)',
-    mutedBg: isDark ? 'hsl(217.2, 32.6%, 17.5%)' : 'hsl(210, 40%, 96%)',
-    inputBg: isDark ? 'hsl(217.2, 32.6%, 17.5%)' : 'hsl(0, 0%, 100%)',
-    inputBorder: isDark ? 'hsl(217.2, 32.6%, 25%)' : 'hsl(214.3, 31.8%, 91.4%)',
+    mutedBg: isDark ? 'hsla(217.2, 32.6%, 17.5%, 0.5)' : 'hsla(210, 40%, 96%, 0.8)',
+    inputBg: isDark ? 'hsla(217.2, 32.6%, 17.5%, 0.8)' : 'hsla(0, 0%, 100%, 0.8)',
+    inputBorder: isDark ? 'hsla(217.2, 32.6%, 25%, 0.5)' : 'hsla(214.3, 31.8%, 91.4%, 0.7)',
   };
 
   const [waypoints, setWaypoints] = useState<Waypoint[]>([
@@ -380,6 +380,8 @@ export const LeftPanel: React.FC = () => {
         bottom: '5%',
         width: '384px',
         backgroundColor: colors.bg,
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
         border: `1px solid ${colors.border}`,
         borderRadius: '32px',
         boxShadow: '0 10px 40px rgba(0,0,0,0.1)',
@@ -664,41 +666,47 @@ export const LeftPanel: React.FC = () => {
             ))}
           </div>
 
-          {/* Add Waypoint Button */}
-          {waypoints.length < waypointLabels.length && (
-            <button
-              onClick={handleAddWaypoint}
-              style={{
-                width: '100%',
-                padding: '12px',
-                backgroundColor: colors.mutedBg,
-                border: `1px solid ${colors.border}`,
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontSize: '14px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px',
-                color: colors.text,
-              }}
-            >
-              {renderIcon('plus')}
-              <span>Punkt hinzufügen</span>
-            </button>
-          )}
+          {/* Actions Row */}
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+            {/* Add Waypoint Button */}
+            {waypoints.length < waypointLabels.length && (
+              <button
+                onClick={handleAddWaypoint}
+                style={{
+                  width: '52px',
+                  height: '52px',
+                  backgroundColor: colors.mutedBg,
+                  border: `1px solid ${colors.border}`,
+                  borderRadius: '50%',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: colors.text,
+                  flexShrink: 0,
+                  transition: 'all 0.2s',
+                  boxSizing: 'border-box',
+                }}
+                title="Punkt hinzufügen"
+              >
+                {renderIcon('plus', { width: 24, height: 24 })}
+              </button>
+            )}
+
+            {/* Route Calculator */}
+            <div style={{ flex: 1 }}>
+              <RouteCalculator />
+            </div>
+          </div>
         </div>
       </div>
-
-      {/* Route Calculator */}
-      <RouteCalculator />
 
       {/* Bottom - POI Filter Buttons */}
       <div
         style={{
           flexShrink: 0,
           borderTop: `1px solid ${colors.border}`,
-          backgroundColor: colors.bg,
+          backgroundColor: 'transparent',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'flex-end',

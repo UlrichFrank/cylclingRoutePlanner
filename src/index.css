@@ -75,3 +75,10 @@
     color: hsl(var(--foreground));
   }
 }
+
+/* Custom Leaflet Zoom Controls */
+.leaflet-control-zoom { border: none !important; box-shadow: none !important; display: flex !important; gap: 8px !important; flex-direction: row !important; margin-bottom: 20px !important; margin-right: 20px !important; }
+.leaflet-control-zoom-in, .leaflet-control-zoom-out { width: 44px !important; height: 44px !important; line-height: 44px !important; border-radius: 50% !important; border: 1px solid hsl(var(--border)) !important; background-color: hsl(var(--background) / 0.85) !important; backdrop-filter: blur(12px) !important; -webkit-backdrop-filter: blur(12px) !important; color: hsl(var(--foreground)) !important; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important; display: flex !important; align-items: center !important; justify-content: center !important; font-size: 20px !important; font-weight: 500 !important; transition: all 0.2s ease !important; text-decoration: none !important; }
+
+.leaflet-bar a:hover { background-color: hsl(var(--muted)) !important; color: hsl(var(--foreground)) !important; }
+.leaflet-control-zoom-in.leaflet-disabled, .leaflet-control-zoom-out.leaflet-disabled { background-color: hsl(var(--background) / 0.85) !important; backdrop-filter: blur(12px) !important; -webkit-backdrop-filter: blur(12px) !important; color: hsl(var(--muted-foreground)) !important; opacity: 0.5 !important; cursor: not-allowed !important; }
