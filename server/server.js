@@ -18,7 +18,9 @@ if (process.env.NODE_ENV === 'test') {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3001;
-const ROUTES_FILE = path.join(__dirname, 'routes.json');
+const ROUTES_FILE = process.env.VERCEL 
+  ? path.join('/tmp', 'routes.json')
+  : path.join(__dirname, 'routes.json');
 
 let db; // Will be initialized after DB init
 
@@ -248,6 +250,11 @@ async function startServer() {
     db = await dbModule.initDatabase();
     console.log('[DB] Database initialized');
     
+    if (process.env.VERCEL) {
+      console.log('[Server] Running in Vercel. Exporting app.');
+      return;
+    }
+
     // Start server
     const server = app.listen(PORT, () => {
       console.log(`\n✅ travelAgent Backend running on http://localhost:${PORT}`);
@@ -278,3 +285,5 @@ async function startServer() {
 }
 
 startServer();
+
+export default app;

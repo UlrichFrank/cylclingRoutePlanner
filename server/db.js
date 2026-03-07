@@ -10,7 +10,10 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DB_PATH = path.join(__dirname, 'travel_agent.db');
+// Use /tmp in Vercel/serverless environments as the rest of the filesystem is read-only
+const DB_PATH = process.env.VERCEL 
+  ? path.join('/tmp', 'travel_agent.db')
+  : path.join(__dirname, 'travel_agent.db');
 
 let SQL;
 let db;

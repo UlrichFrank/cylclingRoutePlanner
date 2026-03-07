@@ -1,36 +1,13 @@
 {
   "version": 2,
-  "buildCommand": "npm run build",
-  "outputDirectory": "dist",
-  "env": {
-    "VITE_API_URL": "https://cylcling-route-planner.vercel.app/api"
-  },
-  "functions": {
-    "server/**": {
-      "runtime": "nodejs18.x",
-      "memory": 1024,
-      "maxDuration": 60
-    }
-  },
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "/server/server.js?_vercel_no_cache=1"
-    }
-  ],
-  "headers": [
+      "destination": "/api/index.js"
+    },
     {
-      "source": "/api/(.*)",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "no-cache, no-store, must-revalidate"
-        },
-        {
-          "key": "Access-Control-Allow-Origin",
-          "value": "*"
-        }
-      ]
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }
