@@ -584,12 +584,36 @@ export const RouteMap: React.FC = () => {
           ) : (
             // Add waypoint if not on one
             <button
-              onClick={() => {
-                const newWaypoints = [...(currentRoute?.waypoints || []), { lat: contextMenu.lat, lng: contextMenu.lng }];
+              onClick={async () => {
+                const lat = contextMenu.lat;
+                const lng = contextMenu.lng;
+                setContextMenu(null);
+                
+                let address = undefined;
+                try {
+                  const response = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`);
+                  const data = await response.json();
+                  if (data && data.address) {
+                    const { road, house_number, city, village, town, postcode } = data.address;
+                    const loc = city || town || village;
+                    if (road) {
+                      address = `${road}${house_number ? ' ' + house_number : ''}${loc ? ', ' + (postcode ? postcode + ' ' : '') + loc : ''}`;
+                    } else if (loc) {
+                      address = `${postcode ? postcode + ' ' : ''}${loc}`;
+                    } else if (data.display_name) {
+                      address = data.display_name;
+                    }
+                  } else if (data && data.display_name) {
+                    address = data.display_name;
+                  }
+                } catch (error) {
+                  console.error('[RouteMap] Reverse geocoding failed', error);
+                }
+
+                const newWaypoints = [...(currentRoute?.waypoints || []), { lat, lng, isLocked: true, address }];
                 useRouteStore.setState({
                   currentRoute: { ...currentRoute, waypoints: newWaypoints }
                 });
-                setContextMenu(null);
               }}
               style={{
                 display: 'block',

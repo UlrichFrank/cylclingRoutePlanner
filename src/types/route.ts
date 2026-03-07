@@ -6,6 +6,8 @@
 export interface RouteCoordinate {
   lat: number;
   lng: number;
+  address?: string;
+  isLocked?: boolean;
 }
 
 export interface RoutePoint extends RouteCoordinate {

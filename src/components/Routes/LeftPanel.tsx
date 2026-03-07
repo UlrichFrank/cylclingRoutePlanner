@@ -5,8 +5,10 @@ import { useRouteStore, RouteCoordinate } from '../../store/routeStore';
 import { usePOIStore } from '../../store/poiStore';
 import { useTheme } from '../Layout/ThemeContext';
 import { POI_COLORS } from '../../types/poi';
-import { fetchPOIs } from '../../services/overpassService';
+import { fetchPOIs, searchPOIsNearRoute } from '../../services/overpassService';
 import { RouteCalculator } from './RouteCalculator';
+// @ts-ignore
+import gpxParser from 'gpxparser';
 
 interface Waypoint {
   label: string;
@@ -80,12 +82,87 @@ export const LeftPanel: React.FC = () => {
 
   const [loading, setLoading] = useState(false);
   const [fetchFailed, setFetchFailed] = useState(false);
-  const { setRoute, currentRoute, routes: savedRoutes, loadRoute } = useRouteStore();
+  const { setRoute, currentRoute, routes: savedRoutes, loadRoute, saveRoute } = useRouteStore();
   const { pois: allPOIs, activeFilters, toggleFilter } = usePOIStore();
   
   const fetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autocompleteTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastFetchedCoordinatesRef = useRef<string>('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleGPXUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const xml = e.target?.result as string;
+        const gpx = new gpxParser();
+        gpx.parse(xml);
+
+        if (gpx.tracks && gpx.tracks.length > 0) {
+          const track = gpx.tracks[0];
+          const points = track.points;
+          
+          if (points.length < 2) return;
+
+          const geometry = points.map((p: any) => ({ lat: p.lat, lng: p.lon }));
+          const elevation = points.map((p: any) => p.ele || 0);
+
+          const totalDistance = track.distance.total || 0; // in meters
+          const totalElevationGain = track.elevation.pos || 0; // in meters
+          const totalElevationLoss = track.elevation.neg || 0; // in meters
+          const maxElevation = track.elevation.max || 0;
+          const minElevation = track.elevation.min || 0;
+          const averageGrade = totalDistance > 0 ? ((totalElevationGain - totalElevationLoss) / totalDistance) * 100 : 0;
+
+          const newRoute = {
+            id: `route-${Date.now()}`,
+            name: track.name || file.name.replace('.gpx', '') || 'Importierte GPX Route',
+            description: track.desc || '',
+            waypoints: [
+              { lat: points[0].lat, lng: points[0].lon, address: 'GPX Start', isLocked: true },
+              { lat: points[points.length - 1].lat, lng: points[points.length - 1].lon, address: 'GPX Ziel', isLocked: true }
+            ],
+            geometry: {
+              geometry,
+              elevation,
+              distance: totalDistance / 1000, // stored in km to match Valhalla's format
+              duration: (totalDistance / 1000 / 20) * 3600, // Estimate 20 km/h
+              elevationGain: totalElevationGain,
+              elevationLoss: totalElevationLoss,
+              maxElevation: maxElevation === -Infinity ? 0 : maxElevation,
+              minElevation: minElevation === Infinity ? 0 : minElevation,
+              averageGrade,
+            },
+            profile: 'road' as const,
+            difficultyLevel: totalElevationGain > 1000 ? 'hard' as const : (totalElevationGain > 500 ? 'medium' as const : 'easy' as const),
+            createdAt: Date.now(),
+            updatedAt: Date.now()
+          };
+
+          saveRoute(newRoute);
+          loadRoute(newRoute.id);
+          
+          try {
+            const pois = await searchPOIsNearRoute(geometry);
+            usePOIStore.setState({ pois });
+          } catch (err) {
+            console.error('POI search failed for GPX', err);
+          }
+        }
+      } catch (err) {
+        console.error("Error parsing GPX", err);
+      }
+    };
+    reader.readAsText(file);
+    
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
 
   const poiFilters: Array<{ key: POIType; icon: React.ReactNode; label: string }> = [
     { key: 'restaurant', icon: renderIcon('restaurant'), label: 'Restaurants' },
@@ -101,7 +178,9 @@ export const LeftPanel: React.FC = () => {
     
     const coordinates: RouteCoordinate[] = waypoints.map(wp => ({
       lat: wp.lat,
-      lng: wp.lng
+      lng: wp.lng,
+      address: wp.placeholder ? wp.placeholder : undefined,
+      isLocked: wp.isLocked
     }));
 
     // Only update if coordinates actually changed
@@ -109,7 +188,10 @@ export const LeftPanel: React.FC = () => {
       !currentRoute.waypoints ||
       currentRoute.waypoints.length !== coordinates.length ||
       currentRoute.waypoints.some((coord: any, idx: number) => 
-        coord.lat !== coordinates[idx].lat || coord.lng !== coordinates[idx].lng
+        coord.lat !== coordinates[idx].lat || 
+        coord.lng !== coordinates[idx].lng ||
+        coord.address !== coordinates[idx].address ||
+        coord.isLocked !== coordinates[idx].isLocked
       );
 
     if (coordsChanged) {
@@ -118,31 +200,84 @@ export const LeftPanel: React.FC = () => {
         waypoints: coordinates,
       });
     }
-  }, [waypoints]);
+  }, [waypoints, currentRoute, setRoute]);
 
-  // Sync routeStore waypoints (from map context menu) to local state
+  // Sync routeStore waypoints to local state (e.g. after loadRoute)
   useEffect(() => {
     if (!currentRoute?.waypoints || currentRoute.waypoints.length === 0) return;
 
     const storeWaypoints = currentRoute.waypoints;
-    const newLocalWaypoints: Waypoint[] = storeWaypoints.map((wp: any, idx: number) => ({
-      label: waypointLabels[idx] || `${idx + 1}`,
-      placeholder: '',
-      lat: wp.lat,
-      lng: wp.lng,
-      isLocked: false,
-    }));
+    const newLocalWaypoints: Waypoint[] = storeWaypoints.map((wp: any, idx: number) => {
+      const hasValidCoords = wp.lat !== 0 || wp.lng !== 0;
+      
+      // Defaut lock state: If it comes from store and has coords, assume locked unless explicitly unlocked
+      const isLocked = wp.isLocked !== undefined ? wp.isLocked : hasValidCoords;
+      
+      return {
+        label: waypointLabels[idx] || `${idx + 1}`,
+        placeholder: wp.address || (hasValidCoords ? `${wp.lat.toFixed(4)}, ${wp.lng.toFixed(4)}` : ''),
+        lat: wp.lat,
+        lng: wp.lng,
+        isLocked,
+      };
+    });
 
-    // Only update if coordinates actually changed to avoid infinite loops
+    // Only update if coordinates or lock state or placeholder actually changed to avoid infinite loops
     const hasChanged = 
       waypoints.length !== newLocalWaypoints.length ||
-      waypoints.some((wp, idx) => 
-        wp.lat !== newLocalWaypoints[idx].lat || wp.lng !== newLocalWaypoints[idx].lng
+      waypoints.some((localWp, idx) => 
+        localWp.lat !== newLocalWaypoints[idx].lat || 
+        localWp.lng !== newLocalWaypoints[idx].lng ||
+        localWp.isLocked !== newLocalWaypoints[idx].isLocked ||
+        localWp.placeholder !== newLocalWaypoints[idx].placeholder
       );
 
     if (hasChanged) {
       console.log('[LeftPanel] Syncing routeStore waypoints to local state:', newLocalWaypoints);
       setWaypoints(newLocalWaypoints);
+
+      // Async reverse geocoding for waypoints that don't have an address yet
+      // Use IIFE to run sequentially and avoid rate limiting
+      (async () => {
+        for (let idx = 0; idx < newLocalWaypoints.length; idx++) {
+          const wp = newLocalWaypoints[idx];
+          if (!storeWaypoints[idx].address && (wp.lat !== 0 || wp.lng !== 0) && wp.placeholder === `${wp.lat.toFixed(4)}, ${wp.lng.toFixed(4)}`) {
+            try {
+              const response = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${wp.lat}&lon=${wp.lng}&format=json`);
+              const data = await response.json();
+              let addressStr = '';
+              
+              if (data && data.address) {
+                const { road, house_number, city, town, village, postcode } = data.address;
+                const loc = city || town || village;
+                if (road) {
+                  addressStr = `${road}${house_number ? ' ' + house_number : ''}${loc ? ', ' + (postcode ? postcode + ' ' : '') + loc : ''}`;
+                } else if (loc) {
+                  addressStr = `${postcode ? postcode + ' ' : ''}${loc}`;
+                } else if (data.display_name) {
+                  addressStr = data.display_name;
+                }
+              } else if (data && data.display_name) {
+                addressStr = data.display_name;
+              }
+
+              if (addressStr) {
+                setWaypoints(prev => {
+                  const wps = [...prev];
+                  if (wps[idx] && wps[idx].lat === wp.lat && wps[idx].lng === wp.lng) {
+                    wps[idx].placeholder = addressStr;
+                  }
+                  return wps;
+                });
+              }
+              // Basic rate limit compliance for Nominatim (max 1 req/sec)
+              await new Promise(resolve => setTimeout(resolve, 1000));
+            } catch (error) {
+              console.error('[LeftPanel] Hydration reverse geocoding failed', error);
+            }
+          }
+        }
+      })();
     }
   }, [currentRoute?.waypoints]);
 
@@ -187,27 +322,58 @@ export const LeftPanel: React.FC = () => {
 
   // Listen for waypoint set from context menu
   useEffect(() => {
-    const handleSetWaypoint = (event: Event) => {
+    const handleSetWaypoint = async (event: Event) => {
       const customEvent = event as CustomEvent;
       const { lat, lng } = customEvent.detail;
 
       // Set the first unset waypoint, or replace the last one
       const newWaypoints = [...waypoints];
-      const firstUnsetIndex = newWaypoints.findIndex(wp => !wp.isLocked);
+      let targetIndex = newWaypoints.findIndex(wp => !wp.isLocked);
       
-      if (firstUnsetIndex !== -1) {
-        newWaypoints[firstUnsetIndex].lat = lat;
-        newWaypoints[firstUnsetIndex].lng = lng;
-        newWaypoints[firstUnsetIndex].isLocked = true;
-        newWaypoints[firstUnsetIndex].placeholder = '';
-      } else if (newWaypoints.length > 1) {
-        newWaypoints[newWaypoints.length - 1].lat = lat;
-        newWaypoints[newWaypoints.length - 1].lng = lng;
-        newWaypoints[newWaypoints.length - 1].isLocked = true;
-        newWaypoints[newWaypoints.length - 1].placeholder = '';
+      if (targetIndex === -1 && newWaypoints.length > 1) {
+        targetIndex = newWaypoints.length - 1;
       }
+      
+      if (targetIndex !== -1) {
+        newWaypoints[targetIndex].lat = lat;
+        newWaypoints[targetIndex].lng = lng;
+        newWaypoints[targetIndex].isLocked = true;
+        newWaypoints[targetIndex].placeholder = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+        setWaypoints(newWaypoints);
 
-      setWaypoints(newWaypoints);
+        try {
+          const response = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`);
+          const data = await response.json();
+          let addressStr = '';
+          
+          if (data && data.address) {
+            const { road, house_number, city, town, village, postcode } = data.address;
+            const loc = city || town || village;
+            if (road) {
+              addressStr = `${road}${house_number ? ' ' + house_number : ''}${loc ? ', ' + (postcode ? postcode + ' ' : '') + loc : ''}`;
+            } else if (loc) {
+              addressStr = `${postcode ? postcode + ' ' : ''}${loc}`;
+            } else if (data.display_name) {
+              addressStr = data.display_name;
+            }
+          } else if (data && data.display_name) {
+            addressStr = data.display_name;
+          }
+
+          if (addressStr) {
+            setWaypoints(prev => {
+              const wps = [...prev];
+              // Update only if it's still the same coordinate
+              if (wps[targetIndex] && wps[targetIndex].lat === lat && wps[targetIndex].lng === lng) {
+                wps[targetIndex].placeholder = addressStr;
+              }
+              return wps;
+            });
+          }
+        } catch (error) {
+          console.error('[LeftPanel] Reverse geocoding failed', error);
+        }
+      }
     };
 
     window.addEventListener('setWaypoint', handleSetWaypoint);
@@ -562,36 +728,29 @@ export const LeftPanel: React.FC = () => {
                     {renderIcon('plus', { width: 16, height: 16 })}
                     Neue Route erstellen
                 </DropdownMenu.Item>
+                <DropdownMenu.Item
+                    onClick={() => {
+                      fileInputRef.current?.click();
+                    }}
+                    style={{ padding: '10px 12px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', color: '#10b981', fontWeight: '500', fontSize: '14px' }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = colors.mutedBg; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                  >
+                    {renderIcon('upload', { width: 16, height: 16 })}
+                    GPX importieren
+                </DropdownMenu.Item>
               </DropdownMenu.Content>
             </DropdownMenu.Root>
           </div>
 
-          {/* Settings Menu */}
-          <DropdownMenu.Root>
-            <DropdownMenu.Trigger asChild>
-              <button style={{ background: 'none', border: 'none', padding: '8px', cursor: 'pointer', color: colors.text }}>
-                {renderIcon('menu')}
-              </button>
-            </DropdownMenu.Trigger>
-            <DropdownMenu.Content 
-              style={{
-                minWidth: '150px',
-                backgroundColor: colors.bg,
-                border: `1px solid ${colors.border}`,
-                borderRadius: '8px',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                padding: '4px',
-                color: colors.text,
-              }}
-            >
-              <DropdownMenu.Item style={{ padding: '8px 12px', fontSize: '14px', cursor: 'pointer' }}>
-                Einstellungen
-              </DropdownMenu.Item>
-              <DropdownMenu.Item style={{ padding: '8px 12px', fontSize: '14px', cursor: 'pointer' }}>
-                Löschen
-              </DropdownMenu.Item>
-            </DropdownMenu.Content>
-          </DropdownMenu.Root>
+          <input
+            type="file"
+            accept=".gpx"
+            ref={fileInputRef}
+            style={{ display: 'none' }}
+            onChange={handleGPXUpload}
+          />
+
         </div>
       </div>
 
@@ -732,7 +891,7 @@ export const LeftPanel: React.FC = () => {
                         padding: '8px',
                       }}
                     >
-                      {renderIcon('menuClose')}
+                      {renderIcon('close')}
                     </button>
                   )}
               </div>

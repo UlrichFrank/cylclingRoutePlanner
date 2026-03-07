@@ -10,8 +10,8 @@
 import React from 'react';
 import {
   Menu,
+  X,
   Plus,
-  MenuClose,
   Mountain,
   Cycling,
   PizzaAlt,
@@ -24,6 +24,7 @@ import {
   LoaderDots,
   Arch,
   Road,
+  FolderOpen,
 } from '@boxicons/react';
 
 // ============================================================================
@@ -64,8 +65,14 @@ export const iconRegistry = {
     label: 'Hinzufügen',
     description: 'Neuer Waypoint',
   },
-  menuClose: {
-    component: MenuClose,
+  upload: {
+    component: FolderOpen,
+    category: 'utility' as const,
+    label: 'Upload',
+    description: 'Upload GPX',
+  },
+  close: {
+    component: X,
     category: 'navigation' as const,
     label: 'Schließen',
     description: 'Menü schließen',
@@ -218,7 +225,7 @@ export const THEME_ICONS = {
 export const NAV_ICONS = {
   menu: iconRegistry.menu,
   plus: iconRegistry.plus,
-  close: iconRegistry.menuClose,
+  close: iconRegistry.close,
   location: iconRegistry.location,
   loading: iconRegistry.loaderDots,
 } as const;
